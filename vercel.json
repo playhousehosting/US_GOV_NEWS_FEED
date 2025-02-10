@@ -2,15 +2,15 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/news.js",
-      "use": "@vercel/node"
+      "src": "package.json",
+      "use": "@vercel/node",
+      "config": {
+        "buildCommand": "npm run build"
+      }
     },
     {
-      "src": "dist/*",
-      "use": "@vercel/static",
-      "config": {
-        "root": "dist"
-      }
+      "src": "api/news.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
