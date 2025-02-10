@@ -1,4 +1,4 @@
-<![CDATA[<template>
+<template>
   <div class="cnn-clone">
     <header class="cnn-header">
       <h1>CNN</h1>
@@ -96,4 +96,3 @@ const topStories = computed(() => news.value.slice(0, 4));
   color: #fff;
 }
 </style>
-]]>
