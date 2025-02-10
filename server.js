@@ -21,8 +21,9 @@ app.get('/api/news', async (req, res) => {
       link: item.link,
       content: item.contentSnippet,
       pubDate: item.pubDate,
-      image: item.enclosure ? item.enclosure.url : null
-    })));
+      image: item.enclosure ? item.enclosure.url : null,
+      category: url.replace('https://www.govinfo.gov/rss/', '').replace('.xml', '')
+    })))
     res.json(articles);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch RSS feeds' });
