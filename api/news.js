@@ -1,8 +1,5 @@
-const express = require('express');
 const axios = require('axios');
 const parser = require('rss-parser');
-const app = express();
-const port = 3000;
 
 const parserInstance = new parser();
 
@@ -13,7 +10,7 @@ const rssFeeds = [
   'https://www.govinfo.gov/rss/comps.xml'
 ];
 
-app.get('/api/news', async (req, res) => {
+module.exports = async (req, res) => {
   try {
     const feedData = await Promise.all(rssFeeds.map(url => parserInstance.parseURL(url)));
     const articles = feedData.flatMap(feed => feed.items.map(item => ({
@@ -28,8 +25,4 @@ app.get('/api/news', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch RSS feeds' });
   }
-});
-
-app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
-});
+};
