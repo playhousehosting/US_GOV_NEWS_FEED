@@ -6,7 +6,9 @@
     <div class="cnn-main">
       <section class="cnn-top-stories">
         <h2>Top Stories</h2>
-        <div class="cnn-top-stories-grid">
+        <div v-if="loading" class="loading">Loading news...</div>
+        <div v-else-if="error" class="error">{{ error }}</div>
+        <div v-else class="cnn-top-stories-grid">
           <div class="cnn-top-story" v-for="article in topStories" :key="article.link">
             <img v-if="article.image" :src="article.image" alt="News Image" class="cnn-top-story-image" />
             <div class="cnn-category">{{ article.category }}</div>
@@ -32,22 +34,39 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { useStore } from 'vuex';
+import { computed, ref, onMounted } from 'vue';
+import axios from 'axios';
 
-const store = useStore();
+const news = ref([]);
+const loading = ref(true);
+const error = ref('');
 const selectedCategory = ref('');
 
-const news = computed(() => {
-  const allNews = store.state.news;
-  if (!selectedCategory.value) return allNews;
-  return allNews.filter(article => article.category === selectedCategory.value);
+const fetchNews = async () => {
+  try {
+    loading.value = true;
+    error.value = '';
+    const response = await axios.get('/api/news');
+    news.value = response.data;
+  } catch (err) {
+    error.value = 'Failed to load news. Please try again later.';
+    console.error('Error fetching news:', err);
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(fetchNews);
+
+const filteredNews = computed(() => {
+  if (!selectedCategory.value) return news.value;
+  return news.value.filter(article => article.category === selectedCategory.value);
 });
 
-const topStories = computed(() => news.value.slice(0, 4));
+const topStories = computed(() => filteredNews.value.slice(0, 4));
 
 const categories = computed(() => {
-  const categorySet = new Set(store.state.news.map(article => article.category));
+  const categorySet = new Set(news.value.map(article => article.category));
   return Array.from(categorySet);
 });
 
@@ -77,6 +96,17 @@ const filterByCategory = (category: string) => {
   padding: 20px;
   gap: 20px;
   flex: 1;
+}
+
+.loading, .error {
+  text-align: center;
+  padding: 20px;
+  font-size: 1.2em;
+  color: #666;
+}
+
+.error {
+  color: #cc0000;
 }
 
 .cnn-top-stories {
@@ -139,6 +169,10 @@ const filterByCategory = (category: string) => {
   color: #666;
   line-height: 1.6;
   margin-bottom: 15px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .cnn-read-more {

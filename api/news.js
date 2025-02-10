@@ -1,4 +1,5 @@
-const Parser = require('rss-parser');
+import Parser from 'rss-parser';
+
 const parser = new Parser();
 
 const rssFeeds = [
@@ -8,31 +9,47 @@ const rssFeeds = [
   'https://www.govinfo.gov/rss/comps.xml'
 ];
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // Set CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
-  
-  // Handle preflight requests
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
+
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
   try {
-    const feedData = await Promise.all(rssFeeds.map(url => parser.parseURL(url)));
-    const articles = feedData.flatMap(feed => feed.items.map(item => ({
-      title: item.title,
-      link: item.link,
-      content: item.contentSnippet,
-      pubDate: item.pubDate,
-      image: item.enclosure ? item.enclosure.url : null,
-      category: url.replace('https://www.govinfo.gov/rss/', '').replace('.xml', '')
-    })));
-    
+    const feedData = await Promise.all(
+      rssFeeds.map(async (url) => {
+        try {
+          return await parser.parseURL(url);
+        } catch (error) {
+          console.error(`Error fetching ${url}:`, error);
+          return { items: [] };
+        }
+      })
+    );
+
+    const articles = feedData.flatMap((feed, index) => 
+      feed.items.map(item => ({
+        title: item.title,
+        link: item.link,
+        content: item.contentSnippet || item.content,
+        pubDate: item.pubDate,
+        image: item.enclosure ? item.enclosure.url : null,
+        category: rssFeeds[index].replace('https://www.govinfo.gov/rss/', '').replace('.xml', '')
+      }))
+    );
+
     res.status(200).json(articles);
   } catch (error) {
     console.error('Error fetching RSS feeds:', error);
     res.status(500).json({ error: 'Failed to fetch RSS feeds' });
   }
-};
+}

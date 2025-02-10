@@ -3,29 +3,38 @@
   "framework": "vite",
   "builds": [
     {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    },
+    {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
         "buildCommand": "npm run build",
         "outputDirectory": "dist"
       }
-    },
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "X-Requested-With, Content-Type, Accept"
+      },
+      "dest": "/api/$1",
+      "continue": true
     },
     {
-      "src": "^/assets/(.*)",
+      "handle": "filesystem"
+    },
+    {
+      "src": "/assets/(.*)",
       "dest": "/dist/assets/$1"
     },
     {
-      "src": ".*",
+      "src": "/(.*)",
       "dest": "/dist/index.html"
     }
   ]
