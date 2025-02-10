@@ -1,26 +1,32 @@
 {
   "version": 2,
+  "framework": "vite",
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/node",
+      "use": "@vercel/static-build",
       "config": {
-        "buildCommand": "npm run build"
+        "buildCommand": "npm run build",
+        "outputDirectory": "dist"
       }
     },
     {
-      "src": "api/news.js",
+      "src": "api/**/*.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/api/news",
-      "dest": "api/news.js"
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     },
     {
-      "src": "/(.*)",
-      "dest": "/dist/$1"
+      "src": "^/assets/(.*)",
+      "dest": "/dist/assets/$1"
+    },
+    {
+      "src": ".*",
+      "dest": "/dist/index.html"
     }
   ]
 }
