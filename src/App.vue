@@ -6,12 +6,12 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue';
-import { useStore } from 'vuex';
+import { useNewsStore } from './store';
 
-const store = useStore();
+const store = useNewsStore();
 
 onMounted(async () => {
-  await store.dispatch('fetchNews');
+  await store.fetchNews();
 });
 </script>
 
