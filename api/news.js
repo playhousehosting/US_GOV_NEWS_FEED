@@ -1,5 +1,6 @@
 const Parser = require('rss-parser');
 const axios = require('axios');
+const xml2js = require('xml2js');
 
 // Configure parser with custom User-Agent
 const parser = new Parser({
@@ -9,6 +10,8 @@ const parser = new Parser({
   timeout: 10000,
   maxRedirects: 5
 });
+
+const xmlParser = new xml2js.Parser({ explicitArray: false });
 
 const rssFeeds = [
   'https://www.govinfo.gov/rss/dcpd.xml',
@@ -24,6 +27,58 @@ const feedCategories = {
   'plaw': 'Public Laws',
   'comps': 'Federal Regulations',
   'budget': 'Budget Documents'
+};
+
+// Helper function to extract package ID from URL
+const extractPackageId = (url) => {
+  const match = url.match(/pkg\/([^/]+)/);
+  return match ? match[1] : null;
+};
+
+// Helper function to get metadata URL
+const getMetadataUrl = (packageId) => {
+  return `https://www.govinfo.gov/metadata/pkg/${packageId}/premis.xml`;
+};
+
+// Helper function to fetch and parse XML
+const fetchXmlMetadata = async (url) => {
+  try {
+    const response = await axios.get(url);
+    const result = await xmlParser.parseStringPromise(response.data);
+    return result;
+  } catch (error) {
+    console.error('Error fetching metadata:', error);
+    return null;
+  }
+};
+
+// Helper function to extract metadata from PREMIS XML
+const extractMetadata = (premisData) => {
+  try {
+    const premis = premisData.premis;
+    const object = premis.object;
+    
+    // Extract relevant information
+    const metadata = {
+      objectIdentifier: object?.objectIdentifier?.objectIdentifierValue,
+      preservationLevel: object?.preservationLevel?.preservationLevelValue,
+      objectCharacteristics: {
+        size: object?.objectCharacteristics?.size,
+        format: object?.objectCharacteristics?.format?.formatName,
+        version: object?.objectCharacteristics?.format?.formatVersion,
+      },
+      originalName: object?.originalName,
+      relationship: object?.relationship?.relationshipType,
+      eventType: premis.event?.eventType,
+      eventDateTime: premis.event?.eventDateTime,
+      eventDetail: premis.event?.eventDetail,
+    };
+
+    return metadata;
+  } catch (error) {
+    console.error('Error extracting metadata:', error);
+    return null;
+  }
 };
 
 // Federal Register API configuration
@@ -88,11 +143,6 @@ const getPublicInspectionDocuments = async () => {
   return response.data.results;
 };
 
-const getDocumentDetails = async (documentNumber) => {
-  const response = await axios.get(`${FR_API_BASE}/documents/${documentNumber}.${FR_FORMAT}`);
-  return response.data;
-};
-
 // Transform Federal Register document
 const transformFederalRegisterDoc = (doc) => ({
   title: `Executive Order ${doc.executive_order_number}: ${doc.title}`,
@@ -111,6 +161,43 @@ const transformFederalRegisterDoc = (doc) => ({
   bodyHtmlUrl: doc.body_html_url,
   citation: doc.citation
 });
+
+// Process RSS item with metadata
+const processRssItem = async (item, category) => {
+  const baseArticle = {
+    title: item.title,
+    link: item.link,
+    content: item.contentSnippet || item.content || '',
+    pubDate: item.pubDate,
+    image: item.enclosure ? item.enclosure.url : null,
+    category: category,
+    type: 'rss'
+  };
+
+  // If it's a budget document, fetch additional metadata
+  if (category === 'Budget Documents') {
+    const packageId = extractPackageId(item.link);
+    if (packageId) {
+      const metadataUrl = getMetadataUrl(packageId);
+      const premisData = await fetchXmlMetadata(metadataUrl);
+      if (premisData) {
+        const metadata = extractMetadata(premisData);
+        return {
+          ...baseArticle,
+          metadata,
+          content: `${baseArticle.content}\n\nDocument Details:\n` +
+            `Format: ${metadata.objectCharacteristics?.format || 'N/A'}\n` +
+            `Version: ${metadata.objectCharacteristics?.version || 'N/A'}\n` +
+            `Size: ${metadata.objectCharacteristics?.size || 'N/A'}\n` +
+            `Last Modified: ${metadata.eventDateTime || 'N/A'}\n` +
+            `Preservation Level: ${metadata.preservationLevel || 'N/A'}`
+        };
+      }
+    }
+  }
+
+  return baseArticle;
+};
 
 module.exports = async (req, res) => {
   // Set CORS headers
@@ -136,13 +223,14 @@ module.exports = async (req, res) => {
           try {
             const feed = await parser.parseURL(url);
             const category = url.match(/\/rss\/([^.]+)\.xml$/)[1];
-            return {
-              items: feed.items.map(item => ({
-                ...item,
-                type: 'rss'
-              })),
-              category: feedCategories[category] || category
-            };
+            const categoryName = feedCategories[category] || category;
+            
+            // Process each item in the feed
+            const items = await Promise.all(
+              feed.items.map(item => processRssItem(item, categoryName))
+            );
+            
+            return { items, category: categoryName };
           } catch (error) {
             console.error(`Error fetching ${url}:`, error);
             return { items: [], category: '' };
@@ -155,17 +243,7 @@ module.exports = async (req, res) => {
 
     // Process RSS feed articles
     const rssArticles = feedData
-      .flatMap(({ items, category }) => 
-        items.map(item => ({
-          title: item.title,
-          link: item.link,
-          content: item.contentSnippet || item.content || '',
-          pubDate: item.pubDate,
-          image: item.enclosure ? item.enclosure.url : null,
-          category: category,
-          type: 'rss'
-        }))
-      )
+      .flatMap(({ items }) => items)
       .filter(article => article.title && article.link);
 
     // Process Federal Register documents
