@@ -1,5 +1,4 @@
 const Parser = require('rss-parser');
-const axios = require('axios');
 
 // Configure parser with custom User-Agent
 const parser = new Parser({
@@ -14,14 +13,16 @@ const rssFeeds = [
   'https://www.govinfo.gov/rss/dcpd.xml',
   'https://www.govinfo.gov/rss/pai.xml',
   'https://www.govinfo.gov/rss/plaw.xml',
-  'https://www.govinfo.gov/rss/comps.xml'
+  'https://www.govinfo.gov/rss/comps.xml',
+  'https://www.govinfo.gov/rss/budget.xml'
 ];
 
 const feedCategories = {
   'dcpd': 'Presidential Communications',
   'pai': 'Public and Private Laws',
   'plaw': 'Public Laws',
-  'comps': 'Federal Regulations'
+  'comps': 'Federal Regulations',
+  'budget': 'Budget Documents'
 };
 
 // Federal Register API configuration
