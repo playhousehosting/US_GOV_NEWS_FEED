@@ -1,4 +1,5 @@
 const Parser = require('rss-parser');
+const axios = require('axios');
 
 // Configure parser with custom User-Agent
 const parser = new Parser({
