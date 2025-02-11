@@ -12,6 +12,16 @@
           {{ type.label }} ({{ store.articlesByType[type.value] }})
         </button>
       </div>
+      <div v-if="store.selectedType === 'executive_order'" class="status-filter">
+        <button 
+          v-for="status in statuses" 
+          :key="status.value"
+          :class="{ active: store.selectedStatus === status.value }"
+          @click="filterByStatus(status.value)"
+        >
+          {{ status.label }} ({{ store.articlesByStatus[status.value] }})
+        </button>
+      </div>
     </header>
 
     <div class="cnn-main">
@@ -20,20 +30,37 @@
           <h2>Executive Orders</h2>
           <div v-if="store.loading" class="loading">Loading executive orders...</div>
           <div v-else-if="store.error" class="error">{{ store.error }}</div>
-          <div v-else-if="store.executiveOrders.length === 0" class="no-results">
+          <div v-else-if="store.getFilteredNews.length === 0" class="no-results">
             No executive orders found
           </div>
           <div v-else class="executive-orders-grid">
-            <div v-for="order in store.executiveOrders" :key="order.link" class="executive-order">
-              <h3>{{ order.title }}</h3>
+            <div v-for="order in store.getFilteredNews" :key="order.link" class="executive-order">
+              <div class="order-header">
+                <h3>{{ order.title }}</h3>
+                <span :class="['status-badge', order.status]">
+                  {{ order.status === 'pending_publication' ? 'Pending Publication' : 'Published' }}
+                </span>
+              </div>
               <div class="order-meta">
-                <span>Document Number: {{ order.documentNumber }}</span>
-                <span>Signed: {{ formatDate(order.signingDate || order.pubDate) }}</span>
+                <div class="meta-item">
+                  <span class="meta-label">Document Number:</span>
+                  <span>{{ order.documentNumber }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Signed:</span>
+                  <span>{{ formatDate(order.signingDate || order.pubDate) }}</span>
+                </div>
+                <div v-if="order.citation" class="meta-item">
+                  <span class="meta-label">Citation:</span>
+                  <span>{{ order.citation }}</span>
+                </div>
               </div>
               <p class="order-content">{{ order.content }}</p>
               <div class="order-actions">
                 <a :href="order.link" target="_blank" class="btn">View Online</a>
                 <a v-if="order.pdfUrl" :href="order.pdfUrl" target="_blank" class="btn">Download PDF</a>
+                <a v-if="order.fullTextUrl" :href="order.fullTextUrl" target="_blank" class="btn">Full Text XML</a>
+                <a v-if="order.bodyHtmlUrl" :href="order.bodyHtmlUrl" target="_blank" class="btn">Body HTML</a>
               </div>
             </div>
           </div>
@@ -116,6 +143,10 @@
           <p>Total Articles: {{ store.getFilteredNews.length }}</p>
           <p>RSS Articles: {{ store.articlesByType.rss }}</p>
           <p>Executive Orders: {{ store.articlesByType.executive_order }}</p>
+          <template v-if="store.selectedType === 'executive_order'">
+            <p>Published: {{ store.articlesByStatus.published }}</p>
+            <p>Pending: {{ store.articlesByStatus.pending_publication }}</p>
+          </template>
           <p>Categories: {{ store.categories.length }}</p>
           <p>Latest Update: {{ latestUpdate }}</p>
         </div>
@@ -139,6 +170,12 @@ const types = [
   { value: 'all', label: 'All News' },
   { value: 'rss', label: 'RSS News' },
   { value: 'executive_order', label: 'Executive Orders' }
+] as const;
+
+const statuses = [
+  { value: 'all', label: 'All Orders' },
+  { value: 'published', label: 'Published' },
+  { value: 'pending_publication', label: 'Pending' }
 ] as const;
 
 // Featured articles (top 4)
@@ -187,6 +224,11 @@ const filterByType = (type: 'all' | 'rss' | 'executive_order') => {
   currentPage.value = 1;
 };
 
+const filterByStatus = (status: 'all' | 'published' | 'pending_publication') => {
+  store.setStatus(status);
+  currentPage.value = 1;
+};
+
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return new Intl.DateTimeFormat('en-US', {
@@ -215,14 +257,14 @@ const formatDate = (dateString: string) => {
   text-align: center;
 }
 
-.type-filter {
+.type-filter, .status-filter {
   margin-top: 15px;
   display: flex;
   justify-content: center;
   gap: 10px;
 }
 
-.type-filter button {
+.type-filter button, .status-filter button {
   background: rgba(255, 255, 255, 0.1);
   border: none;
   padding: 8px 16px;
@@ -232,11 +274,11 @@ const formatDate = (dateString: string) => {
   transition: background-color 0.2s ease;
 }
 
-.type-filter button:hover {
+.type-filter button:hover, .status-filter button:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 
-.type-filter button.active {
+.type-filter button.active, .status-filter button.active {
   background: rgba(255, 255, 255, 0.3);
 }
 
@@ -280,12 +322,52 @@ const formatDate = (dateString: string) => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.order-meta {
+.order-header {
   display: flex;
   justify-content: space-between;
-  color: #666;
-  margin: 10px 0;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.order-header h3 {
+  margin: 0;
+  flex: 1;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
   font-size: 0.9em;
+  font-weight: bold;
+}
+
+.status-badge.pending_publication {
+  background-color: #ffd700;
+  color: #333;
+}
+
+.status-badge.published {
+  background-color: #4caf50;
+  color: white;
+}
+
+.order-meta {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 15px;
+  font-size: 0.9em;
+}
+
+.meta-item {
+  display: flex;
+  gap: 10px;
+}
+
+.meta-label {
+  color: #666;
+  min-width: 120px;
 }
 
 .order-content {
@@ -295,6 +377,7 @@ const formatDate = (dateString: string) => {
 
 .order-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 15px;
 }
@@ -307,6 +390,7 @@ const formatDate = (dateString: string) => {
   text-decoration: none;
   border-radius: 4px;
   transition: background-color 0.2s ease;
+  font-size: 0.9em;
 }
 
 .btn:hover {
@@ -496,7 +580,7 @@ const formatDate = (dateString: string) => {
 }
 
 @media (max-width: 768px) {
-  .type-filter {
+  .type-filter, .status-filter {
     flex-direction: column;
   }
 
@@ -514,8 +598,24 @@ const formatDate = (dateString: string) => {
   }
 
   .order-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .meta-item {
     flex-direction: column;
     gap: 5px;
+  }
+
+  .meta-label {
+    min-width: auto;
+  }
+
+  .order-actions {
+    flex-direction: column;
+  }
+
+  .btn {
+    text-align: center;
   }
 }
 </style>

@@ -13,6 +13,11 @@ interface Article {
   documentNumber?: string;
   signingDate?: string;
   executiveOrderNumber?: string;
+  fullTextUrl?: string;
+  jsonUrl?: string;
+  bodyHtmlUrl?: string;
+  citation?: string;
+  status?: 'published' | 'pending_publication';
 }
 
 interface State {
@@ -21,6 +26,7 @@ interface State {
   error: string | null;
   selectedCategory: string | null;
   selectedType: 'all' | 'rss' | 'executive_order';
+  selectedStatus: 'all' | 'published' | 'pending_publication';
 }
 
 // Get the base URL from environment or default to current origin
@@ -40,7 +46,8 @@ export const useNewsStore = defineStore('news', {
     loading: false,
     error: null,
     selectedCategory: null,
-    selectedType: 'all'
+    selectedType: 'all',
+    selectedStatus: 'all'
   }),
 
   getters: {
@@ -55,6 +62,11 @@ export const useNewsStore = defineStore('news', {
       // Filter by category
       if (this.selectedCategory) {
         filtered = filtered.filter(article => article.category === this.selectedCategory);
+      }
+
+      // Filter by status
+      if (this.selectedStatus !== 'all') {
+        filtered = filtered.filter(article => article.status === this.selectedStatus);
       }
 
       return filtered;
@@ -79,11 +91,28 @@ export const useNewsStore = defineStore('news', {
         });
     },
 
+    pendingExecutiveOrders(): Article[] {
+      return this.executiveOrders.filter(article => article.status === 'pending_publication');
+    },
+
+    publishedExecutiveOrders(): Article[] {
+      return this.executiveOrders.filter(article => article.status !== 'pending_publication');
+    },
+
     articlesByType(): Record<string, number> {
       return {
         all: this.news.length,
         rss: this.news.filter(article => article.type === 'rss').length,
         executive_order: this.news.filter(article => article.type === 'executive_order').length
+      };
+    },
+
+    articlesByStatus(): Record<string, number> {
+      const eoArticles = this.executiveOrders;
+      return {
+        all: eoArticles.length,
+        published: eoArticles.filter(article => article.status !== 'pending_publication').length,
+        pending_publication: eoArticles.filter(article => article.status === 'pending_publication').length
       };
     }
   },
@@ -122,6 +151,10 @@ export const useNewsStore = defineStore('news', {
 
     setType(type: 'all' | 'rss' | 'executive_order') {
       this.selectedType = type;
+    },
+
+    setStatus(status: 'all' | 'published' | 'pending_publication') {
+      this.selectedStatus = status;
     }
   }
 });

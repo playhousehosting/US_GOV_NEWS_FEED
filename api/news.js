@@ -24,14 +24,9 @@ const feedCategories = {
   'comps': 'Federal Regulations'
 };
 
-// Federal Register API URL
-const getFederalRegisterURL = () => {
-  const today = new Date();
-  const startDate = '01/20/2025';
-  const endDate = `${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}/${today.getFullYear()}`;
-  
-  return `https://www.federalregister.gov/api/v1/documents.json?conditions%5Bcorrection%5D=0&conditions%5Bpresident%5D=donald-trump&conditions%5Bpresidential_document_type%5D=executive_order&conditions%5Bsigning_date%5D%5Bgte%5D=${startDate}&conditions%5Bsigning_date%5D%5Blte%5D=${endDate}&conditions%5Btype%5D%5B%5D=PRESDOCU&fields%5B%5D=citation&fields%5B%5D=document_number&fields%5B%5D=html_url&fields%5B%5D=pdf_url&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=publication_date&fields%5B%5D=signing_date&fields%5B%5D=title&fields%5B%5D=executive_order_number&fields%5B%5D=body_html_url&per_page=10000`;
-};
+// Federal Register API configuration
+const FR_API_BASE = 'https://www.federalregister.gov/api/v1';
+const FR_FORMAT = 'json';
 
 // Helper function to handle errors
 const handleError = (error) => {
@@ -43,22 +38,77 @@ const handleError = (error) => {
   };
 };
 
-// Transform Federal Register data
-const transformFederalRegisterData = (data) => {
-  return data.results.map(item => ({
-    title: `Executive Order ${item.executive_order_number}: ${item.title}`,
-    link: item.html_url,
-    content: `Document Number: ${item.document_number}\nCitation: ${item.citation}`,
-    pubDate: item.publication_date,
-    image: null,
-    category: 'Executive Orders',
-    type: 'executive_order',
-    pdfUrl: item.pdf_url,
-    documentNumber: item.document_number,
-    signingDate: item.signing_date,
-    executiveOrderNumber: item.executive_order_number
-  }));
+// Federal Register API functions
+const getFederalRegisterDocuments = async () => {
+  const params = {
+    conditions: {
+      type: ['PRESDOCU'],
+      presidential_document_type: 'executive_order',
+      correction: '0',
+      president: 'donald-trump',
+      signing_date: {
+        gte: '2025-01-20',
+        lte: new Date().toISOString().split('T')[0]
+      }
+    },
+    fields: [
+      'citation',
+      'document_number',
+      'html_url',
+      'pdf_url',
+      'type',
+      'subtype',
+      'publication_date',
+      'signing_date',
+      'title',
+      'executive_order_number',
+      'body_html_url',
+      'full_text_xml_url',
+      'json_url'
+    ],
+    per_page: 1000,
+    order: 'executive_order'
+  };
+
+  const response = await axios.get(`${FR_API_BASE}/documents.${FR_FORMAT}`, { params });
+  return response.data.results;
 };
+
+const getPublicInspectionDocuments = async () => {
+  const response = await axios.get(`${FR_API_BASE}/public-inspection-documents.${FR_FORMAT}`, {
+    params: {
+      conditions: {
+        type: ['PRESDOCU'],
+        special_filing: '0'
+      }
+    }
+  });
+  return response.data.results;
+};
+
+const getDocumentDetails = async (documentNumber) => {
+  const response = await axios.get(`${FR_API_BASE}/documents/${documentNumber}.${FR_FORMAT}`);
+  return response.data;
+};
+
+// Transform Federal Register document
+const transformFederalRegisterDoc = (doc) => ({
+  title: `Executive Order ${doc.executive_order_number}: ${doc.title}`,
+  link: doc.html_url,
+  content: doc.abstract || `Document Number: ${doc.document_number}\nCitation: ${doc.citation}`,
+  pubDate: doc.publication_date,
+  image: null,
+  category: 'Executive Orders',
+  type: 'executive_order',
+  pdfUrl: doc.pdf_url,
+  documentNumber: doc.document_number,
+  signingDate: doc.signing_date,
+  executiveOrderNumber: doc.executive_order_number,
+  fullTextUrl: doc.full_text_xml_url,
+  jsonUrl: doc.json_url,
+  bodyHtmlUrl: doc.body_html_url,
+  citation: doc.citation
+});
 
 module.exports = async (req, res) => {
   // Set CORS headers
@@ -77,8 +127,8 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Fetch RSS feeds and Federal Register data concurrently
-    const [feedData, federalRegisterResponse] = await Promise.all([
+    // Fetch all data sources concurrently
+    const [feedData, frDocuments, piDocuments] = await Promise.all([
       Promise.all(
         rssFeeds.map(async (url) => {
           try {
@@ -97,7 +147,8 @@ module.exports = async (req, res) => {
           }
         })
       ),
-      axios.get(getFederalRegisterURL())
+      getFederalRegisterDocuments(),
+      getPublicInspectionDocuments()
     ]);
 
     // Process RSS feed articles
@@ -115,11 +166,25 @@ module.exports = async (req, res) => {
       )
       .filter(article => article.title && article.link);
 
-    // Process Federal Register articles
-    const federalRegisterArticles = transformFederalRegisterData(federalRegisterResponse.data);
+    // Process Federal Register documents
+    const frArticles = frDocuments.map(transformFederalRegisterDoc);
+    const piArticles = piDocuments
+      .filter(doc => doc.type === 'PRESDOCU' && doc.subtype === 'EO')
+      .map(doc => ({
+        ...transformFederalRegisterDoc(doc),
+        status: 'pending_publication'
+      }));
 
-    // Combine and sort all articles
-    const allArticles = [...rssArticles, ...federalRegisterArticles]
+    // Combine all articles and remove duplicates
+    const allArticles = [...rssArticles, ...frArticles, ...piArticles]
+      .reduce((acc, current) => {
+        const x = acc.find(item => item.link === current.link);
+        if (!x) {
+          return acc.concat([current]);
+        } else {
+          return acc;
+        }
+      }, [])
       .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
 
     // Send response with cache headers
