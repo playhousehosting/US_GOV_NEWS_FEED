@@ -19,7 +19,12 @@ const rssFeeds = [
   'https://www.govinfo.gov/rss/plaw.xml',
   'https://www.govinfo.gov/rss/comps.xml',
   'https://www.govinfo.gov/rss/budget.xml',
-  'https://www.govinfo.gov/rss/uscourts-ksd.xml'
+  'https://www.govinfo.gov/rss/uscourts-ksd.xml',
+  'https://www.govinfo.gov/rss/uscourts-okeb.xml',
+  'https://www.govinfo.gov/rss/uscourts-oknb.xml',
+  'https://www.govinfo.gov/rss/uscourts-okwb.xml',
+  'https://www.govinfo.gov/rss/uscourts-moeb.xml',
+  'https://www.govinfo.gov/rss/uscourts-mowb.xml'
 ];
 
 const feedCategories = {
@@ -28,7 +33,12 @@ const feedCategories = {
   'plaw': 'Public Laws',
   'comps': 'Federal Regulations',
   'budget': 'Budget Documents',
-  'uscourts-ksd': 'US Courts - Kansas District'
+  'uscourts-ksd': 'US Courts - Kansas District',
+  'uscourts-okeb': 'US Courts - OK Eastern Bankruptcy',
+  'uscourts-oknb': 'US Courts - OK Northern Bankruptcy',
+  'uscourts-okwb': 'US Courts - OK Western Bankruptcy',
+  'uscourts-moeb': 'US Courts - MO Eastern Bankruptcy',
+  'uscourts-mowb': 'US Courts - MO Western Bankruptcy'
 };
 
 // Helper function to extract package ID from URL
