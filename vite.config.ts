@@ -1,8 +1,8 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import vue from '@vitejs/plugin-vue';
-import { loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
+  // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, process.cwd(), '');
   
   return {
@@ -10,17 +10,27 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
-      sourcemap: true
+      sourcemap: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor': ['vue', 'pinia', 'vue-router', 'axios']
+          }
+        }
+      }
     },
     server: {
       proxy: {
         '/api': {
           target: env.VITE_API_URL || 'http://localhost:3000',
           changeOrigin: true,
-          secure: false,
-          rewrite: (path) => path.replace(/^\/api/, '')
+          secure: false
         }
       }
+    },
+    define: {
+      __VUE_PROD_DEVTOOLS__: false,
+      'process.env': {}
     }
   };
 });
