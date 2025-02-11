@@ -18,7 +18,8 @@ const rssFeeds = [
   'https://www.govinfo.gov/rss/pai.xml',
   'https://www.govinfo.gov/rss/plaw.xml',
   'https://www.govinfo.gov/rss/comps.xml',
-  'https://www.govinfo.gov/rss/budget.xml'
+  'https://www.govinfo.gov/rss/budget.xml',
+  'https://www.govinfo.gov/rss/uscourts-ksd.xml'
 ];
 
 const feedCategories = {
@@ -26,7 +27,8 @@ const feedCategories = {
   'pai': 'Public and Private Laws',
   'plaw': 'Public Laws',
   'comps': 'Federal Regulations',
-  'budget': 'Budget Documents'
+  'budget': 'Budget Documents',
+  'uscourts-ksd': 'US Courts - Kansas District'
 };
 
 // Helper function to extract package ID from URL
