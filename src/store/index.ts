@@ -8,6 +8,11 @@ interface Article {
   pubDate: string;
   image: string | null;
   category: string;
+  type: 'rss' | 'executive_order';
+  pdfUrl?: string;
+  documentNumber?: string;
+  signingDate?: string;
+  executiveOrderNumber?: string;
 }
 
 interface State {
@@ -15,6 +20,7 @@ interface State {
   loading: boolean;
   error: string | null;
   selectedCategory: string | null;
+  selectedType: 'all' | 'rss' | 'executive_order';
 }
 
 // Get the base URL from environment or default to current origin
@@ -33,13 +39,25 @@ export const useNewsStore = defineStore('news', {
     news: [],
     loading: false,
     error: null,
-    selectedCategory: null
+    selectedCategory: null,
+    selectedType: 'all'
   }),
 
   getters: {
     getFilteredNews(): Article[] {
-      if (!this.selectedCategory) return this.news;
-      return this.news.filter(article => article.category === this.selectedCategory);
+      let filtered = this.news;
+
+      // Filter by type
+      if (this.selectedType !== 'all') {
+        filtered = filtered.filter(article => article.type === this.selectedType);
+      }
+
+      // Filter by category
+      if (this.selectedCategory) {
+        filtered = filtered.filter(article => article.category === this.selectedCategory);
+      }
+
+      return filtered;
     },
     
     topStories(): Article[] {
@@ -48,7 +66,25 @@ export const useNewsStore = defineStore('news', {
 
     categories(): string[] {
       const categorySet = new Set(this.news.map(article => article.category));
-      return Array.from(categorySet);
+      return Array.from(categorySet).sort();
+    },
+
+    executiveOrders(): Article[] {
+      return this.news
+        .filter(article => article.type === 'executive_order')
+        .sort((a, b) => {
+          const aNum = parseInt(a.executiveOrderNumber || '0');
+          const bNum = parseInt(b.executiveOrderNumber || '0');
+          return bNum - aNum;
+        });
+    },
+
+    articlesByType(): Record<string, number> {
+      return {
+        all: this.news.length,
+        rss: this.news.filter(article => article.type === 'rss').length,
+        executive_order: this.news.filter(article => article.type === 'executive_order').length
+      };
     }
   },
 
@@ -82,6 +118,10 @@ export const useNewsStore = defineStore('news', {
 
     setCategory(category: string | null) {
       this.selectedCategory = category;
+    },
+
+    setType(type: 'all' | 'rss' | 'executive_order') {
+      this.selectedType = type;
     }
   }
 });

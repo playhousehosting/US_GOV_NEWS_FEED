@@ -2,62 +2,97 @@
   <div class="cnn-clone">
     <header class="cnn-header">
       <h1>US Government News Feed</h1>
+      <div class="type-filter">
+        <button 
+          v-for="type in types" 
+          :key="type.value"
+          :class="{ active: store.selectedType === type.value }"
+          @click="filterByType(type.value)"
+        >
+          {{ type.label }} ({{ store.articlesByType[type.value] }})
+        </button>
+      </div>
     </header>
+
     <div class="cnn-main">
       <section class="cnn-content">
-        <div class="cnn-top-stories">
-          <h2>Top Stories</h2>
-          <div v-if="store.loading" class="loading">Loading news...</div>
+        <div v-if="store.selectedType === 'executive_order'" class="executive-orders">
+          <h2>Executive Orders</h2>
+          <div v-if="store.loading" class="loading">Loading executive orders...</div>
           <div v-else-if="store.error" class="error">{{ store.error }}</div>
-          <div v-else-if="store.getFilteredNews.length === 0" class="no-results">
-            No news articles found{{ store.selectedCategory ? ` for category: ${store.selectedCategory}` : '' }}
+          <div v-else-if="store.executiveOrders.length === 0" class="no-results">
+            No executive orders found
           </div>
-          <div v-else class="cnn-top-stories-grid">
-            <div class="cnn-top-story featured" v-for="article in featuredArticles" :key="article.link">
-              <img v-if="article.image" :src="article.image" alt="News Image" class="cnn-top-story-image" />
-              <div class="cnn-category">{{ article.category }}</div>
-              <h2 class="cnn-title">{{ article.title }}</h2>
-              <p class="cnn-content">{{ article.content }}</p>
-              <div class="cnn-meta">
-                <span class="cnn-date">{{ formatDate(article.pubDate) }}</span>
-                <a :href="article.link" target="_blank" class="cnn-read-more">Read more</a>
+          <div v-else class="executive-orders-grid">
+            <div v-for="order in store.executiveOrders" :key="order.link" class="executive-order">
+              <h3>{{ order.title }}</h3>
+              <div class="order-meta">
+                <span>Document Number: {{ order.documentNumber }}</span>
+                <span>Signed: {{ formatDate(order.signingDate || order.pubDate) }}</span>
+              </div>
+              <p class="order-content">{{ order.content }}</p>
+              <div class="order-actions">
+                <a :href="order.link" target="_blank" class="btn">View Online</a>
+                <a v-if="order.pdfUrl" :href="order.pdfUrl" target="_blank" class="btn">Download PDF</a>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="cnn-all-stories" v-if="!store.loading && !store.error && remainingArticles.length > 0">
-          <h2>More Stories</h2>
-          <div class="cnn-stories-grid">
-            <div class="cnn-story" v-for="article in paginatedArticles" :key="article.link">
-              <img v-if="article.image" :src="article.image" alt="News Image" class="cnn-story-image" />
-              <div class="cnn-category">{{ article.category }}</div>
-              <h3 class="cnn-title">{{ article.title }}</h3>
-              <p class="cnn-content">{{ article.content }}</p>
-              <div class="cnn-meta">
-                <span class="cnn-date">{{ formatDate(article.pubDate) }}</span>
-                <a :href="article.link" target="_blank" class="cnn-read-more">Read more</a>
+        <div v-else>
+          <div class="cnn-top-stories">
+            <h2>Top Stories</h2>
+            <div v-if="store.loading" class="loading">Loading news...</div>
+            <div v-else-if="store.error" class="error">{{ store.error }}</div>
+            <div v-else-if="store.getFilteredNews.length === 0" class="no-results">
+              No news articles found{{ store.selectedCategory ? ` for category: ${store.selectedCategory}` : '' }}
+            </div>
+            <div v-else class="cnn-top-stories-grid">
+              <div class="cnn-top-story featured" v-for="article in featuredArticles" :key="article.link">
+                <img v-if="article.image" :src="article.image" alt="News Image" class="cnn-top-story-image" />
+                <div class="cnn-category">{{ article.category }}</div>
+                <h2 class="cnn-title">{{ article.title }}</h2>
+                <p class="cnn-content">{{ article.content }}</p>
+                <div class="cnn-meta">
+                  <span class="cnn-date">{{ formatDate(article.pubDate) }}</span>
+                  <a :href="article.link" target="_blank" class="cnn-read-more">Read more</a>
+                </div>
               </div>
             </div>
           </div>
-          
-          <!-- Pagination -->
-          <div class="pagination" v-if="totalPages > 1">
-            <button 
-              :disabled="currentPage === 1" 
-              @click="currentPage--"
-              class="pagination-btn"
-            >
-              Previous
-            </button>
-            <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
-            <button 
-              :disabled="currentPage === totalPages" 
-              @click="currentPage++"
-              class="pagination-btn"
-            >
-              Next
-            </button>
+
+          <div class="cnn-all-stories" v-if="!store.loading && !store.error && remainingArticles.length > 0">
+            <h2>More Stories</h2>
+            <div class="cnn-stories-grid">
+              <div class="cnn-story" v-for="article in paginatedArticles" :key="article.link">
+                <img v-if="article.image" :src="article.image" alt="News Image" class="cnn-story-image" />
+                <div class="cnn-category">{{ article.category }}</div>
+                <h3 class="cnn-title">{{ article.title }}</h3>
+                <p class="cnn-content">{{ article.content }}</p>
+                <div class="cnn-meta">
+                  <span class="cnn-date">{{ formatDate(article.pubDate) }}</span>
+                  <a :href="article.link" target="_blank" class="cnn-read-more">Read more</a>
+                </div>
+              </div>
+            </div>
+            
+            <div class="pagination" v-if="totalPages > 1">
+              <button 
+                :disabled="currentPage === 1" 
+                @click="currentPage--"
+                class="pagination-btn"
+              >
+                Previous
+              </button>
+              <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+              <button 
+                :disabled="currentPage === totalPages" 
+                @click="currentPage++"
+                class="pagination-btn"
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -79,6 +114,8 @@
         <div class="cnn-stats" v-if="!store.loading && !store.error">
           <h3>Statistics</h3>
           <p>Total Articles: {{ store.getFilteredNews.length }}</p>
+          <p>RSS Articles: {{ store.articlesByType.rss }}</p>
+          <p>Executive Orders: {{ store.articlesByType.executive_order }}</p>
           <p>Categories: {{ store.categories.length }}</p>
           <p>Latest Update: {{ latestUpdate }}</p>
         </div>
@@ -91,17 +128,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { useNewsStore } from '../store';
 
 const store = useNewsStore();
 const currentPage = ref(1);
 const itemsPerPage = 12;
 
-// Fetch news on component mount
-onMounted(() => {
-  store.fetchNews();
-});
+const types = [
+  { value: 'all', label: 'All News' },
+  { value: 'rss', label: 'RSS News' },
+  { value: 'executive_order', label: 'Executive Orders' }
+] as const;
 
 // Featured articles (top 4)
 const featuredArticles = computed(() => 
@@ -143,6 +181,12 @@ const clearCategory = () => {
   currentPage.value = 1;
 };
 
+const filterByType = (type: 'all' | 'rss' | 'executive_order') => {
+  store.setType(type);
+  store.setCategory(null);
+  currentPage.value = 1;
+};
+
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return new Intl.DateTimeFormat('en-US', {
@@ -171,6 +215,31 @@ const formatDate = (dateString: string) => {
   text-align: center;
 }
 
+.type-filter {
+  margin-top: 15px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.type-filter button {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  padding: 8px 16px;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.type-filter button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.type-filter button.active {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .cnn-main {
   display: flex;
   padding: 20px;
@@ -195,6 +264,53 @@ const formatDate = (dateString: string) => {
 
 .no-results {
   font-style: italic;
+}
+
+.executive-orders-grid {
+  display: grid;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.executive-order {
+  border: 1px solid #ddd;
+  padding: 20px;
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.order-meta {
+  display: flex;
+  justify-content: space-between;
+  color: #666;
+  margin: 10px 0;
+  font-size: 0.9em;
+}
+
+.order-content {
+  margin: 15px 0;
+  line-height: 1.6;
+}
+
+.order-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.btn {
+  display: inline-block;
+  padding: 8px 16px;
+  background-color: #cc0000;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.btn:hover {
+  background-color: #990000;
 }
 
 .cnn-top-stories-grid {
@@ -380,6 +496,10 @@ const formatDate = (dateString: string) => {
 }
 
 @media (max-width: 768px) {
+  .type-filter {
+    flex-direction: column;
+  }
+
   .cnn-main {
     flex-direction: column;
   }
@@ -391,6 +511,11 @@ const formatDate = (dateString: string) => {
 
   .cnn-stories-grid {
     grid-template-columns: 1fr;
+  }
+
+  .order-meta {
+    flex-direction: column;
+    gap: 5px;
   }
 }
 </style>
