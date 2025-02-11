@@ -27,6 +27,7 @@ interface State {
   selectedCategory: string | null;
   selectedType: 'all' | 'rss' | 'executive_order';
   selectedStatus: 'all' | 'published' | 'pending_publication';
+  searchQuery: string;
 }
 
 // Get the base URL from environment or default to current origin
@@ -47,12 +48,25 @@ export const useNewsStore = defineStore('news', {
     error: null,
     selectedCategory: null,
     selectedType: 'all',
-    selectedStatus: 'all'
+    selectedStatus: 'all',
+    searchQuery: ''
   }),
 
   getters: {
     getFilteredNews(): Article[] {
       let filtered = this.news;
+
+      // Filter by search query
+      if (this.searchQuery) {
+        const query = this.searchQuery.toLowerCase();
+        filtered = filtered.filter(article => 
+          article.title.toLowerCase().includes(query) ||
+          article.content.toLowerCase().includes(query) ||
+          article.category.toLowerCase().includes(query) ||
+          (article.documentNumber && article.documentNumber.toLowerCase().includes(query)) ||
+          (article.citation && article.citation.toLowerCase().includes(query))
+        );
+      }
 
       // Filter by type
       if (this.selectedType !== 'all') {
@@ -69,7 +83,12 @@ export const useNewsStore = defineStore('news', {
         filtered = filtered.filter(article => article.status === this.selectedStatus);
       }
 
-      return filtered;
+      // Sort by date, newest first
+      return filtered.sort((a, b) => {
+        const dateA = new Date(a.signingDate || a.pubDate);
+        const dateB = new Date(b.signingDate || b.pubDate);
+        return dateB.getTime() - dateA.getTime();
+      });
     },
     
     topStories(): Article[] {
@@ -85,6 +104,14 @@ export const useNewsStore = defineStore('news', {
       return this.news
         .filter(article => article.type === 'executive_order')
         .sort((a, b) => {
+          // Sort by signing date first
+          const dateA = new Date(a.signingDate || a.pubDate);
+          const dateB = new Date(b.signingDate || b.pubDate);
+          const dateDiff = dateB.getTime() - dateA.getTime();
+          
+          if (dateDiff !== 0) return dateDiff;
+          
+          // If same date, sort by executive order number
           const aNum = parseInt(a.executiveOrderNumber || '0');
           const bNum = parseInt(b.executiveOrderNumber || '0');
           return bNum - aNum;
@@ -114,6 +141,28 @@ export const useNewsStore = defineStore('news', {
         published: eoArticles.filter(article => article.status !== 'pending_publication').length,
         pending_publication: eoArticles.filter(article => article.status === 'pending_publication').length
       };
+    },
+
+    searchResults(): {
+      total: number;
+      byType: Record<string, number>;
+      byCategory: Record<string, number>;
+    } {
+      const filtered = this.getFilteredNews;
+      const byType = {
+        rss: filtered.filter(article => article.type === 'rss').length,
+        executive_order: filtered.filter(article => article.type === 'executive_order').length
+      };
+      const byCategory = filtered.reduce((acc, article) => {
+        acc[article.category] = (acc[article.category] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      return {
+        total: filtered.length,
+        byType,
+        byCategory
+      };
     }
   },
 
@@ -128,7 +177,8 @@ export const useNewsStore = defineStore('news', {
         if (response.data && Array.isArray(response.data)) {
           // Sort articles by date, most recent first
           this.news = response.data.sort((a, b) => 
-            new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()
+            new Date(b.signingDate || b.pubDate).getTime() - 
+            new Date(a.signingDate || a.pubDate).getTime()
           );
         } else {
           throw new Error('Invalid response format');
@@ -155,6 +205,10 @@ export const useNewsStore = defineStore('news', {
 
     setStatus(status: 'all' | 'published' | 'pending_publication') {
       this.selectedStatus = status;
+    },
+
+    setSearchQuery(query: string) {
+      this.searchQuery = query;
     }
   }
 });
