@@ -1,6 +1,9 @@
-import Parser from 'rss-parser';
-
-const parser = new Parser();
+const Parser = require('rss-parser');
+const parser = new Parser({
+  headers: {
+    'User-Agent': 'US-Government-News-Feed/1.0'
+  }
+});
 
 const rssFeeds = [
   'https://www.govinfo.gov/rss/dcpd.xml',
@@ -9,7 +12,14 @@ const rssFeeds = [
   'https://www.govinfo.gov/rss/comps.xml'
 ];
 
-export default async function handler(req, res) {
+const feedCategories = {
+  'dcpd': 'Presidential Communications',
+  'pai': 'Public and Private Laws',
+  'plaw': 'Public Laws',
+  'comps': 'Federal Regulations'
+};
+
+module.exports = async (req, res) => {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,28 +38,39 @@ export default async function handler(req, res) {
     const feedData = await Promise.all(
       rssFeeds.map(async (url) => {
         try {
-          return await parser.parseURL(url);
+          const feed = await parser.parseURL(url);
+          const category = url.match(/\/rss\/([^.]+)\.xml$/)[1];
+          return {
+            items: feed.items,
+            category: feedCategories[category] || category
+          };
         } catch (error) {
           console.error(`Error fetching ${url}:`, error);
-          return { items: [] };
+          return { items: [], category: '' };
         }
       })
     );
 
-    const articles = feedData.flatMap((feed, index) => 
-      feed.items.map(item => ({
+    const articles = feedData.flatMap(({ items, category }) => 
+      items.map(item => ({
         title: item.title,
         link: item.link,
-        content: item.contentSnippet || item.content,
+        content: item.contentSnippet || item.content || '',
         pubDate: item.pubDate,
         image: item.enclosure ? item.enclosure.url : null,
-        category: rssFeeds[index].replace('https://www.govinfo.gov/rss/', '').replace('.xml', '')
+        category: category
       }))
-    );
+    ).filter(article => article.title && article.link);
+
+    // Sort articles by date, most recent first
+    articles.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
 
     res.status(200).json(articles);
   } catch (error) {
     console.error('Error fetching RSS feeds:', error);
-    res.status(500).json({ error: 'Failed to fetch RSS feeds' });
+    res.status(500).json({ 
+      error: 'Failed to fetch RSS feeds',
+      message: error.message 
+    });
   }
-}
+};

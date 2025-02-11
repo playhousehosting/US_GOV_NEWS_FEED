@@ -6,10 +6,13 @@
     <div class="cnn-main">
       <section class="cnn-top-stories">
         <h2>Top Stories</h2>
-        <div v-if="loading" class="loading">Loading news...</div>
-        <div v-else-if="error" class="error">{{ error }}</div>
+        <div v-if="store.loading" class="loading">Loading news...</div>
+        <div v-else-if="store.error" class="error">{{ store.error }}</div>
+        <div v-else-if="store.getFilteredNews.length === 0" class="no-results">
+          No news articles found{{ store.selectedCategory ? ` for category: ${store.selectedCategory}` : '' }}
+        </div>
         <div v-else class="cnn-top-stories-grid">
-          <div class="cnn-top-story" v-for="article in topStories" :key="article.link">
+          <div class="cnn-top-story" v-for="article in store.topStories" :key="article.link">
             <img v-if="article.image" :src="article.image" alt="News Image" class="cnn-top-story-image" />
             <div class="cnn-category">{{ article.category }}</div>
             <h2 class="cnn-title">{{ article.title }}</h2>
@@ -21,7 +24,13 @@
       <aside class="cnn-sidebar">
         <h2>Categories</h2>
         <ul class="cnn-categories">
-          <li v-for="category in categories" :key="category" @click="filterByCategory(category)" :class="{ active: selectedCategory === category }">
+          <li @click="clearCategory" :class="{ active: !store.selectedCategory }">
+            All Categories
+          </li>
+          <li v-for="category in store.categories" 
+              :key="category" 
+              @click="filterByCategory(category)" 
+              :class="{ active: store.selectedCategory === category }">
             {{ category }}
           </li>
         </ul>
@@ -34,44 +43,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
-import axios from 'axios';
+import { onMounted } from 'vue';
+import { useNewsStore } from '../store';
 
-const news = ref([]);
-const loading = ref(true);
-const error = ref('');
-const selectedCategory = ref('');
+const store = useNewsStore();
 
-const fetchNews = async () => {
-  try {
-    loading.value = true;
-    error.value = '';
-    const response = await axios.get('/api/news');
-    news.value = response.data;
-  } catch (err) {
-    error.value = 'Failed to load news. Please try again later.';
-    console.error('Error fetching news:', err);
-  } finally {
-    loading.value = false;
-  }
+// Fetch news on component mount
+onMounted(() => {
+  store.fetchNews();
+});
+
+// Methods
+const filterByCategory = (category: string) => {
+  store.setCategory(category);
 };
 
-onMounted(fetchNews);
-
-const filteredNews = computed(() => {
-  if (!selectedCategory.value) return news.value;
-  return news.value.filter(article => article.category === selectedCategory.value);
-});
-
-const topStories = computed(() => filteredNews.value.slice(0, 4));
-
-const categories = computed(() => {
-  const categorySet = new Set(news.value.map(article => article.category));
-  return Array.from(categorySet);
-});
-
-const filterByCategory = (category: string) => {
-  selectedCategory.value = selectedCategory.value === category ? '' : category;
+const clearCategory = () => {
+  store.setCategory(null);
 };
 </script>
 
@@ -98,7 +86,7 @@ const filterByCategory = (category: string) => {
   flex: 1;
 }
 
-.loading, .error {
+.loading, .error, .no-results {
   text-align: center;
   padding: 20px;
   font-size: 1.2em;
@@ -107,6 +95,10 @@ const filterByCategory = (category: string) => {
 
 .error {
   color: #cc0000;
+}
+
+.no-results {
+  font-style: italic;
 }
 
 .cnn-top-stories {
@@ -198,7 +190,7 @@ const filterByCategory = (category: string) => {
   margin: 5px 0;
   cursor: pointer;
   border-radius: 4px;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .cnn-categories li:hover {

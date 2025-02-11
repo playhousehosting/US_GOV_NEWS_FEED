@@ -1,25 +1,70 @@
-import { createStore } from 'vuex';
+import { defineStore } from 'pinia';
 import axios from 'axios';
 
-const store = createStore({
-  state: {
-    news: []
-  },
-  mutations: {
-    setNews(state, news) {
-      state.news = news;
+interface Article {
+  title: string;
+  link: string;
+  content: string;
+  pubDate: string;
+  image: string | null;
+  category: string;
+}
+
+interface State {
+  news: Article[];
+  loading: boolean;
+  error: string | null;
+  selectedCategory: string | null;
+}
+
+export const useNewsStore = defineStore('news', {
+  state: (): State => ({
+    news: [],
+    loading: false,
+    error: null,
+    selectedCategory: null
+  }),
+
+  getters: {
+    getFilteredNews(): Article[] {
+      if (!this.selectedCategory) return this.news;
+      return this.news.filter(article => article.category === this.selectedCategory);
+    },
+    
+    topStories(): Article[] {
+      return this.getFilteredNews.slice(0, 4);
+    },
+
+    categories(): string[] {
+      const categorySet = new Set(this.news.map(article => article.category));
+      return Array.from(categorySet);
     }
   },
+
   actions: {
-    async fetchNews({ commit }) {
+    async fetchNews() {
+      this.loading = true;
+      this.error = null;
+      
       try {
-        const response = await axios.get('/api/news');
-        commit('setNews', response.data);
+        const response = await axios.get<Article[]>('/api/news');
+        if (response.data && Array.isArray(response.data)) {
+          this.news = response.data;
+        } else {
+          throw new Error('Invalid response format');
+        }
       } catch (error) {
         console.error('Failed to fetch news:', error);
+        this.error = 'Failed to load news. Please try again later.';
+      } finally {
+        this.loading = false;
       }
+    },
+
+    setCategory(category: string | null) {
+      this.selectedCategory = category;
     }
   }
 });
 
-export default store;
+export type { Article, State };
