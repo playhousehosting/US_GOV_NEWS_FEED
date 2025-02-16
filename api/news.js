@@ -211,7 +211,35 @@ const processRssItem = async (item, category) => {
   return baseArticle;
 };
 
+// Helper function to log with timestamp
+const log = (message, data = null) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${message}`);
+  if (data) {
+    console.log(JSON.stringify(data, null, 2));
+  }
+};
+
+// Helper function to handle errors
+const handleApiError = (error, source) => {
+  const timestamp = new Date().toISOString();
+  console.error(`[${timestamp}] Error in ${source}:`, error);
+  if (error.response) {
+    console.error('Response data:', error.response.data);
+    console.error('Response status:', error.response.status);
+  }
+  return {
+    error: true,
+    source,
+    message: error.message,
+    timestamp
+  };
+};
+
 module.exports = async (req, res) => {
+  const startTime = Date.now();
+  log('API request received', { method: req.method, url: req.url });
+
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -224,11 +252,14 @@ module.exports = async (req, res) => {
   // Handle preflight request
   if (req.method === 'OPTIONS') {
     res.status(200).end();
+    log('Preflight request handled');
     return;
   }
 
   try {
-    // Fetch all data sources concurrently
+    log('Starting data fetch');
+    
+    // Fetch all data sources concurrently with timeouts
     const [feedData, frDocuments, piDocuments] = await Promise.all([
       Promise.all(
         rssFeeds.map(async (url) => {
@@ -267,23 +298,74 @@ module.exports = async (req, res) => {
         status: 'pending_publication'
       }));
 
+    // Validate and combine articles
+    const validateArticle = (article) => {
+      return article &&
+        typeof article === 'object' &&
+        typeof article.title === 'string' &&
+        typeof article.link === 'string' &&
+        (article.pubDate || article.signingDate) &&
+        typeof article.category === 'string' &&
+        ['rss', 'executive_order'].includes(article.type);
+    };
+
     // Combine all articles and remove duplicates
     const allArticles = [...rssArticles, ...frArticles, ...piArticles]
+      .filter(validateArticle)
       .reduce((acc, current) => {
         const x = acc.find(item => item.link === current.link);
         if (!x) {
           return acc.concat([current]);
-        } else {
-          return acc;
         }
+        return acc;
       }, [])
-      .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+      .sort((a, b) => {
+        try {
+          const dateA = new Date(a.pubDate || a.signingDate || 0);
+          const dateB = new Date(b.pubDate || b.signingDate || 0);
+          return dateB.getTime() - dateA.getTime();
+        } catch (error) {
+          log('Error sorting articles', { error: error.message });
+          return 0;
+        }
+      });
+
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+
+    // Log response statistics
+    log('API request completed', {
+      duration: `${duration}ms`,
+      articleCount: allArticles.length,
+      rssCount: rssArticles.length,
+      frCount: frArticles.length,
+      piCount: piArticles.length
+    });
 
     // Send response with cache headers
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate');
-    res.status(200).json(allArticles);
+    res.status(200).json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      articles: allArticles,
+      meta: {
+        total: allArticles.length,
+        sources: {
+          rss: rssArticles.length,
+          federalRegister: frArticles.length,
+          publicInspection: piArticles.length
+        },
+        processingTime: duration
+      }
+    });
   } catch (error) {
-    const { message, status } = handleError(error);
-    res.status(status).json({ error: true, message });
+    log('API request failed', error);
+    const status = error.response?.status || 500;
+    res.status(status).json({
+      success: false,
+      error: true,
+      message: error.message || 'An unexpected error occurred',
+      timestamp: new Date().toISOString()
+    });
   }
 };

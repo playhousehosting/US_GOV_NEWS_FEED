@@ -20,6 +20,21 @@ interface Article {
   status?: 'published' | 'pending_publication';
 }
 
+interface ApiResponse {
+  success: boolean;
+  timestamp: string;
+  articles: Article[];
+  meta: {
+    total: number;
+    sources: {
+      rss: number;
+      federalRegister: number;
+      publicInspection: number;
+    };
+    processingTime: number;
+  };
+}
+
 interface State {
   news: Article[];
   loading: boolean;
@@ -30,16 +45,56 @@ interface State {
   searchQuery: string;
 }
 
-// Get the base URL from environment or default to current origin
-const baseURL = import.meta.env.VITE_API_URL || window.location.origin;
+// Helper function to determine the API base URL
+const getBaseURL = () => {
+  // If VITE_API_URL is set, use it
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
+  // In production, use the current origin
+  if (import.meta.env.PROD) {
+    return window.location.origin;
+  }
+
+  // In development, default to localhost:3000
+  return 'http://localhost:3000';
+};
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL,
+  baseURL: getBaseURL(),
   headers: {
     'Content-Type': 'application/json',
   },
+  // Add timeout and retry configuration
+  timeout: 10000,
+  validateStatus: (status) => status >= 200 && status < 500, // Don't reject if status is 4xx
 });
+
+// Add request interceptor for debugging
+api.interceptors.request.use(
+  (config) => {
+    console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`);
+    return config;
+  },
+  (error) => {
+    console.error('[API Request Error]', error);
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for debugging
+api.interceptors.response.use(
+  (response) => {
+    console.log(`[API Response] Status: ${response.status}`, response.data);
+    return response;
+  },
+  (error) => {
+    console.error('[API Response Error]', error);
+    return Promise.reject(error);
+  }
+);
 
 export const useNewsStore = defineStore('news', {
   state: (): State => ({
@@ -54,41 +109,59 @@ export const useNewsStore = defineStore('news', {
 
   getters: {
     getFilteredNews(): Article[] {
-      let filtered = this.news;
+      try {
+        // Ensure news array exists and is not empty
+        if (!this.news || !Array.isArray(this.news)) {
+          return [];
+        }
 
-      // Filter by search query
-      if (this.searchQuery) {
-        const query = this.searchQuery.toLowerCase();
-        filtered = filtered.filter(article => 
-          article.title.toLowerCase().includes(query) ||
-          article.content.toLowerCase().includes(query) ||
-          article.category.toLowerCase().includes(query) ||
-          (article.documentNumber && article.documentNumber.toLowerCase().includes(query)) ||
-          (article.citation && article.citation.toLowerCase().includes(query))
-        );
+        let filtered = [...this.news];
+
+        // Filter by search query
+        if (this.searchQuery) {
+          const query = this.searchQuery.toLowerCase();
+          filtered = filtered.filter(article => {
+            if (!article) return false;
+            return (
+              (article.title?.toLowerCase().includes(query)) ||
+              (article.content?.toLowerCase().includes(query)) ||
+              (article.category?.toLowerCase().includes(query)) ||
+              (article.documentNumber?.toLowerCase().includes(query)) ||
+              (article.citation?.toLowerCase().includes(query))
+            );
+          });
+        }
+
+        // Filter by type
+        if (this.selectedType !== 'all') {
+          filtered = filtered.filter(article => article?.type === this.selectedType);
+        }
+
+        // Filter by category
+        if (this.selectedCategory) {
+          filtered = filtered.filter(article => article?.category === this.selectedCategory);
+        }
+
+        // Filter by status
+        if (this.selectedStatus !== 'all') {
+          filtered = filtered.filter(article => article?.status === this.selectedStatus);
+        }
+
+        // Sort by date, newest first
+        return filtered.sort((a, b) => {
+          try {
+            const dateA = new Date(a?.signingDate || a?.pubDate || 0);
+            const dateB = new Date(b?.signingDate || b?.pubDate || 0);
+            return dateB.getTime() - dateA.getTime();
+          } catch (error) {
+            console.error('Error sorting articles:', error);
+            return 0;
+          }
+        });
+      } catch (error) {
+        console.error('Error in getFilteredNews:', error);
+        return [];
       }
-
-      // Filter by type
-      if (this.selectedType !== 'all') {
-        filtered = filtered.filter(article => article.type === this.selectedType);
-      }
-
-      // Filter by category
-      if (this.selectedCategory) {
-        filtered = filtered.filter(article => article.category === this.selectedCategory);
-      }
-
-      // Filter by status
-      if (this.selectedStatus !== 'all') {
-        filtered = filtered.filter(article => article.status === this.selectedStatus);
-      }
-
-      // Sort by date, newest first
-      return filtered.sort((a, b) => {
-        const dateA = new Date(a.signingDate || a.pubDate);
-        const dateB = new Date(b.signingDate || b.pubDate);
-        return dateB.getTime() - dateA.getTime();
-      });
     },
     
     topStories(): Article[] {
@@ -96,51 +169,95 @@ export const useNewsStore = defineStore('news', {
     },
 
     categories(): string[] {
-      const categorySet = new Set(this.news.map(article => article.category));
-      return Array.from(categorySet).sort();
+      try {
+        if (!this.news || !Array.isArray(this.news)) return [];
+        const categorySet = new Set(
+          this.news
+            .filter(article => article && article.category)
+            .map(article => article.category)
+        );
+        return Array.from(categorySet).sort();
+      } catch (error) {
+        console.error('Error in categories getter:', error);
+        return [];
+      }
     },
 
     executiveOrders(): Article[] {
-      return this.news
-        .filter(article => article.type === 'executive_order')
-        .sort((a, b) => {
-          // Sort by signing date first
-          const dateA = new Date(a.signingDate || a.pubDate);
-          const dateB = new Date(b.signingDate || b.pubDate);
-          const dateDiff = dateB.getTime() - dateA.getTime();
-          
-          if (dateDiff !== 0) return dateDiff;
-          
-          // If same date, sort by executive order number
-          const aNum = parseInt(a.executiveOrderNumber || '0');
-          const bNum = parseInt(b.executiveOrderNumber || '0');
-          return bNum - aNum;
-        });
+      try {
+        if (!this.news || !Array.isArray(this.news)) return [];
+        return this.news
+          .filter(article => article && article.type === 'executive_order')
+          .sort((a, b) => {
+            try {
+              // Sort by signing date first
+              const dateA = new Date(a?.signingDate || a?.pubDate || 0);
+              const dateB = new Date(b?.signingDate || b?.pubDate || 0);
+              const dateDiff = dateB.getTime() - dateA.getTime();
+              
+              if (dateDiff !== 0) return dateDiff;
+              
+              // If same date, sort by executive order number
+              const aNum = parseInt(a?.executiveOrderNumber || '0');
+              const bNum = parseInt(b?.executiveOrderNumber || '0');
+              return bNum - aNum;
+            } catch (error) {
+              console.error('Error sorting executive orders:', error);
+              return 0;
+            }
+          });
+      } catch (error) {
+        console.error('Error in executiveOrders getter:', error);
+        return [];
+      }
     },
 
     pendingExecutiveOrders(): Article[] {
-      return this.executiveOrders.filter(article => article.status === 'pending_publication');
+      try {
+        return this.executiveOrders.filter(article => article?.status === 'pending_publication');
+      } catch (error) {
+        console.error('Error in pendingExecutiveOrders getter:', error);
+        return [];
+      }
     },
 
     publishedExecutiveOrders(): Article[] {
-      return this.executiveOrders.filter(article => article.status !== 'pending_publication');
+      try {
+        return this.executiveOrders.filter(article => article?.status !== 'pending_publication');
+      } catch (error) {
+        console.error('Error in publishedExecutiveOrders getter:', error);
+        return [];
+      }
     },
 
     articlesByType(): Record<string, number> {
-      return {
-        all: this.news.length,
-        rss: this.news.filter(article => article.type === 'rss').length,
-        executive_order: this.news.filter(article => article.type === 'executive_order').length
-      };
+      try {
+        if (!this.news || !Array.isArray(this.news)) {
+          return { all: 0, rss: 0, executive_order: 0 };
+        }
+        return {
+          all: this.news.length,
+          rss: this.news.filter(article => article?.type === 'rss').length,
+          executive_order: this.news.filter(article => article?.type === 'executive_order').length
+        };
+      } catch (error) {
+        console.error('Error in articlesByType getter:', error);
+        return { all: 0, rss: 0, executive_order: 0 };
+      }
     },
 
     articlesByStatus(): Record<string, number> {
-      const eoArticles = this.executiveOrders;
-      return {
-        all: eoArticles.length,
-        published: eoArticles.filter(article => article.status !== 'pending_publication').length,
-        pending_publication: eoArticles.filter(article => article.status === 'pending_publication').length
-      };
+      try {
+        const eoArticles = this.executiveOrders;
+        return {
+          all: eoArticles.length,
+          published: eoArticles.filter(article => article?.status !== 'pending_publication').length,
+          pending_publication: eoArticles.filter(article => article?.status === 'pending_publication').length
+        };
+      } catch (error) {
+        console.error('Error in articlesByStatus getter:', error);
+        return { all: 0, published: 0, pending_publication: 0 };
+      }
     },
 
     searchResults(): {
@@ -148,21 +265,41 @@ export const useNewsStore = defineStore('news', {
       byType: Record<string, number>;
       byCategory: Record<string, number>;
     } {
-      const filtered = this.getFilteredNews;
-      const byType = {
-        rss: filtered.filter(article => article.type === 'rss').length,
-        executive_order: filtered.filter(article => article.type === 'executive_order').length
-      };
-      const byCategory = filtered.reduce((acc, article) => {
-        acc[article.category] = (acc[article.category] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      try {
+        const filtered = this.getFilteredNews;
+        if (!filtered || !Array.isArray(filtered)) {
+          return {
+            total: 0,
+            byType: { rss: 0, executive_order: 0 },
+            byCategory: {}
+          };
+        }
 
-      return {
-        total: filtered.length,
-        byType,
-        byCategory
-      };
+        const byType = {
+          rss: filtered.filter(article => article?.type === 'rss').length,
+          executive_order: filtered.filter(article => article?.type === 'executive_order').length
+        };
+
+        const byCategory = filtered.reduce((acc, article) => {
+          if (article?.category) {
+            acc[article.category] = (acc[article.category] || 0) + 1;
+          }
+          return acc;
+        }, {} as Record<string, number>);
+
+        return {
+          total: filtered.length,
+          byType,
+          byCategory
+        };
+      } catch (error) {
+        console.error('Error in searchResults getter:', error);
+        return {
+          total: 0,
+          byType: { rss: 0, executive_order: 0 },
+          byCategory: {}
+        };
+      }
     }
   },
 
@@ -170,25 +307,54 @@ export const useNewsStore = defineStore('news', {
     async fetchNews() {
       this.loading = true;
       this.error = null;
+      this.news = []; // Initialize with empty array
       
       try {
-        const response = await api.get<Article[]>('/api/news');
+        const response = await api.get<ApiResponse>('/api/news');
         
-        if (response.data && Array.isArray(response.data)) {
-          // Sort articles by date, most recent first
-          this.news = response.data.sort((a, b) => 
-            new Date(b.signingDate || b.pubDate).getTime() - 
-            new Date(a.signingDate || a.pubDate).getTime()
+        if (response?.data?.success && Array.isArray(response.data.articles)) {
+          // Validate and clean the data
+          const validArticles = response.data.articles.filter(article =>
+            article &&
+            typeof article === 'object' &&
+            article.title &&
+            article.link &&
+            (article.pubDate || article.signingDate) &&
+            article.category &&
+            ['rss', 'executive_order'].includes(article.type)
           );
+
+          if (validArticles.length === 0) {
+            console.warn('No valid articles found in response');
+            this.error = 'No valid articles found';
+            this.news = [];
+            return;
+          }
+
+          // Articles are already sorted by date from the API
+          this.news = validArticles;
+
+          // Log statistics
+          console.log('News fetched successfully:', {
+            total: response.data.meta.total,
+            valid: validArticles.length,
+            sources: response.data.meta.sources,
+            processingTime: response.data.meta.processingTime
+          });
         } else {
-          throw new Error('Invalid response format');
+          console.error('Invalid API response format:', response.data);
+          throw new Error('Invalid API response format');
         }
       } catch (error) {
         console.error('Failed to fetch news:', error);
         if (axios.isAxiosError(error)) {
-          this.error = error.response?.data?.message || 'Failed to load news. Please try again later.';
+          this.error = error.response?.data?.message ||
+            error.message ||
+            'Failed to load news. Please try again later.';
         } else {
-          this.error = 'Failed to load news. Please try again later.';
+          this.error = error instanceof Error ?
+            error.message :
+            'Failed to load news. Please try again later.';
         }
       } finally {
         this.loading = false;
