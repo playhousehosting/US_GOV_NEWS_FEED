@@ -2,16 +2,34 @@ const Parser = require('rss-parser');
 const axios = require('axios');
 const xml2js = require('xml2js');
 
-// Configure parser with custom User-Agent
+// Configure parser with custom User-Agent and better error handling
 const parser = new Parser({
   headers: {
     'User-Agent': 'US-Government-News-Feed/1.0 (https://us-gov-news-feed.vercel.app)'
   },
-  timeout: 10000,
-  maxRedirects: 5
+  timeout: 15000, // Increased timeout
+  maxRedirects: 5,
+  customFields: {
+    item: [
+      ['title', 'title'],
+      ['link', 'link'],
+      ['pubDate', 'pubDate'],
+      ['description', 'content'],
+      ['content:encoded', 'content'],
+      ['dc:creator', 'author'],
+      ['category', 'category']
+    ]
+  }
 });
 
-const xmlParser = new xml2js.Parser({ explicitArray: false });
+// Configure XML parser with better error handling
+const xmlParser = new xml2js.Parser({
+  explicitArray: false,
+  trim: true,
+  explicitRoot: false,
+  emptyTag: null,
+  ignoreAttrs: true
+});
 
 const rssFeeds = [
   'https://www.govinfo.gov/rss/dcpd.xml',
@@ -97,62 +115,150 @@ const extractMetadata = (premisData) => {
 const FR_API_BASE = 'https://www.federalregister.gov/api/v1';
 const FR_FORMAT = 'json';
 
-// Helper function to handle errors
+// Create axios instance for Federal Register API with retry logic
+const frApi = axios.create({
+  baseURL: FR_API_BASE,
+  timeout: 15000,
+  headers: {
+    'Accept': 'application/json',
+    'User-Agent': 'US-Government-News-Feed/1.0 (https://us-gov-news-feed.vercel.app)'
+  }
+});
+
+// Add response interceptor for rate limiting
+frApi.interceptors.response.use(
+  response => response,
+  async error => {
+    if (error.response?.status === 429) {
+      const retryAfter = error.response.headers['retry-after'] || 60;
+      log('Rate limited by Federal Register API', { retryAfter });
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+      return frApi.request(error.config);
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Helper function to handle errors with better context
 const handleError = (error) => {
-  console.error('Error:', error);
-  return {
+  const errorInfo = {
     error: true,
     message: error.message || 'An error occurred while fetching the data',
-    status: error.response?.status || 500
+    status: error.response?.status || 500,
+    timestamp: new Date().toISOString()
   };
+
+  if (error.response?.data) {
+    errorInfo.details = error.response.data;
+  }
+
+  if (error.config) {
+    errorInfo.request = {
+      url: error.config.url,
+      method: error.config.method,
+      timeout: error.config.timeout
+    };
+  }
+
+  log('Error details:', errorInfo);
+  return errorInfo;
 };
 
 // Federal Register API functions
 const getFederalRegisterDocuments = async () => {
-  const params = {
-    conditions: {
-      type: ['PRESDOCU'],
-      presidential_document_type: 'executive_order',
-      correction: '0',
-      president: 'donald-trump',
-      signing_date: {
-        gte: '2025-01-20',
-        lte: new Date().toISOString().split('T')[0]
-      }
-    },
-    fields: [
-      'citation',
-      'document_number',
-      'html_url',
-      'pdf_url',
-      'type',
-      'subtype',
-      'publication_date',
-      'signing_date',
-      'title',
-      'executive_order_number',
-      'body_html_url',
-      'full_text_xml_url',
-      'json_url'
-    ],
-    per_page: 1000,
-    order: 'executive_order'
-  };
+  try {
+    const currentDate = new Date().toISOString().split('T')[0];
+    log('Fetching Federal Register documents', { fromDate: '2025-01-20', toDate: currentDate });
 
-  const response = await axios.get(`${FR_API_BASE}/documents.${FR_FORMAT}`, { params });
-  return response.data.results;
+    const params = {
+      conditions: {
+        type: ['PRESDOCU'],
+        presidential_document_type: 'executive_order',
+        correction: '0',
+        president: 'donald-trump',
+        signing_date: {
+          gte: '2025-01-20',
+          lte: currentDate
+        }
+      },
+      fields: [
+        'citation',
+        'document_number',
+        'html_url',
+        'pdf_url',
+        'type',
+        'subtype',
+        'publication_date',
+        'signing_date',
+        'title',
+        'executive_order_number',
+        'body_html_url',
+        'full_text_xml_url',
+        'json_url',
+        'abstract'
+      ],
+      per_page: 1000,
+      order: 'executive_order'
+    };
+
+    const response = await frApi.get(`/documents.${FR_FORMAT}`, { params });
+    
+    if (!response.data?.results) {
+      throw new Error('Invalid Federal Register API response format');
+    }
+
+    log('Successfully fetched Federal Register documents', {
+      count: response.data.results.length,
+      firstDocument: response.data.results[0]?.document_number
+    });
+
+    return response.data.results;
+  } catch (error) {
+    const errorInfo = handleError(error);
+    log('Error fetching Federal Register documents', errorInfo);
+    throw error;
+  }
 };
 
 const getPublicInspectionDocuments = async () => {
-  const response = await axios.get(`${FR_API_BASE}/public-inspection-documents.${FR_FORMAT}`, {
-    params: {
-      conditions: {
-        type: ['PRESDOCU'],
-        special_filing: '0'
+  try {
+    log('Fetching Public Inspection documents');
+
+    const response = await frApi.get(`/public-inspection-documents.${FR_FORMAT}`, {
+      params: {
+        conditions: {
+          type: ['PRESDOCU'],
+          special_filing: '0'
+        },
+        fields: [
+          'title',
+          'document_number',
+          'html_url',
+          'pdf_url',
+          'type',
+          'subtype',
+          'publication_date',
+          'filing_date',
+          'executive_order_number'
+        ]
       }
+    });
+
+    if (!response.data?.results) {
+      throw new Error('Invalid Public Inspection API response format');
     }
-  });
-  return response.data.results;
+
+    log('Successfully fetched Public Inspection documents', {
+      count: response.data.results.length,
+      types: [...new Set(response.data.results.map(doc => doc.type))]
+    });
+
+    return response.data.results;
+  } catch (error) {
+    const errorInfo = handleError(error);
+    log('Error fetching Public Inspection documents', errorInfo);
+    throw error;
+  }
 };
 
 // Transform Federal Register document
@@ -259,30 +365,67 @@ module.exports = async (req, res) => {
   try {
     log('Starting data fetch');
     
-    // Fetch all data sources concurrently with timeouts
-    const [feedData, frDocuments, piDocuments] = await Promise.all([
-      Promise.all(
+    // Fetch all data sources with better error handling
+    let feedData = [], frDocuments = [], piDocuments = [];
+    
+    try {
+      // Fetch RSS feeds with timeout
+      feedData = await Promise.all(
         rssFeeds.map(async (url) => {
           try {
             const feed = await parser.parseURL(url);
-            const category = url.match(/\/rss\/([^.]+)\.xml$/)[1];
+            const categoryMatch = url.match(/\/rss\/([^.]+)\.xml$/);
+            if (!categoryMatch) {
+              log(`Invalid RSS feed URL format: ${url}`);
+              return { items: [], category: '' };
+            }
+            
+            const category = categoryMatch[1];
             const categoryName = feedCategories[category] || category;
             
             // Process each item in the feed
             const items = await Promise.all(
-              feed.items.map(item => processRssItem(item, categoryName))
+              (feed.items || []).map(item => processRssItem(item, categoryName))
             );
+            
+            log(`Successfully fetched RSS feed: ${url}`, {
+              itemCount: items.length,
+              category: categoryName
+            });
             
             return { items, category: categoryName };
           } catch (error) {
-            console.error(`Error fetching ${url}:`, error);
+            log(`Error fetching RSS feed: ${url}`, { error: error.message });
             return { items: [], category: '' };
           }
         })
-      ),
-      getFederalRegisterDocuments(),
-      getPublicInspectionDocuments()
-    ]);
+      );
+
+      // Fetch Federal Register documents
+      try {
+        frDocuments = await getFederalRegisterDocuments();
+        log('Successfully fetched Federal Register documents', {
+          count: frDocuments.length
+        });
+      } catch (error) {
+        log('Error fetching Federal Register documents', { error: error.message });
+        frDocuments = [];
+      }
+
+      // Fetch Public Inspection documents
+      try {
+        piDocuments = await getPublicInspectionDocuments();
+        log('Successfully fetched Public Inspection documents', {
+          count: piDocuments.length
+        });
+      } catch (error) {
+        log('Error fetching Public Inspection documents', { error: error.message });
+        piDocuments = [];
+      }
+    } catch (error) {
+      log('Error fetching data sources', { error: error.message });
+      // Continue with empty arrays for failed sources
+    }
 
     // Process RSS feed articles
     const rssArticles = feedData
@@ -342,6 +485,22 @@ module.exports = async (req, res) => {
       piCount: piArticles.length
     });
 
+    // Validate final result
+    if (!allArticles || !Array.isArray(allArticles)) {
+      throw new Error('Failed to process articles');
+    }
+
+    if (allArticles.length === 0) {
+      log('No articles found');
+      res.status(404).json({
+        success: false,
+        error: true,
+        message: 'No articles found',
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
     // Send response with cache headers
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate');
     res.status(200).json({
@@ -359,13 +518,16 @@ module.exports = async (req, res) => {
       }
     });
   } catch (error) {
-    log('API request failed', error);
+    const errorDetails = handleApiError(error, 'main');
+    log('API request failed', errorDetails);
+    
     const status = error.response?.status || 500;
     res.status(status).json({
       success: false,
       error: true,
-      message: error.message || 'An unexpected error occurred',
-      timestamp: new Date().toISOString()
+      message: errorDetails.message || 'An unexpected error occurred',
+      timestamp: new Date().toISOString(),
+      details: errorDetails
     });
   }
 };
