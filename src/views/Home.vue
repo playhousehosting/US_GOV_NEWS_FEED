@@ -302,29 +302,33 @@ const formatDate = (dateString: string) => {
   max-width: 1200px;
   margin: 0 auto;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   padding: 0 20px;
+  gap: 15px;
 }
 
 .header-content h1 {
   margin: 0;
-  text-align: left;
-  flex: 1;
+  text-align: center;
   font-size: 1.8em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 600;
+  letter-spacing: -0.5px;
 }
 
 .presidential-seal {
-  width: 40px;
-  height: 40px;
+  width: 45px;
+  height: 45px;
   filter: brightness(0) invert(1);
   opacity: 0.9;
   transition: all 0.3s ease;
-  margin-left: 15px;
   flex-shrink: 0;
+  padding: 2px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
 }
 
 .presidential-seal:hover {
@@ -732,15 +736,20 @@ const formatDate = (dateString: string) => {
 @media (max-width: 768px) {
   .header-content {
     padding: 0 15px;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .presidential-seal {
-    width: 35px;
-    height: 35px;
+    width: 40px;
+    height: 40px;
+    order: -1; /* Move seal above title */
   }
 
   .header-content h1 {
-    font-size: 1.5em;
+    font-size: 1.4em;
+    text-align: center;
+    max-width: 100%;
   }
 
   .type-filter, .status-filter {
@@ -810,16 +819,20 @@ const formatDate = (dateString: string) => {
 
 @media (max-width: 480px) {
   .header-content {
-    padding: 0 10px;
+    padding: 10px;
+    gap: 8px;
   }
 
   .presidential-seal {
-    width: 30px;
-    height: 30px;
+    width: 35px;
+    height: 35px;
+    border-width: 1.5px;
   }
 
   .header-content h1 {
-    font-size: 1.3em;
+    font-size: 1.2em;
+    padding: 0 5px;
+    letter-spacing: -0.3px;
   }
 
   .search-bar {
