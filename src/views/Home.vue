@@ -183,13 +183,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useNewsStore } from '../store';
 
 const store = useNewsStore();
 const currentPage = ref(1);
 const itemsPerPage = 12;
 const searchQuery = ref('');
+
+onMounted(async () => {
+  await store.fetchNews();
+});
 
 // Debounce search to avoid too many updates
 let searchTimeout: number | null = null;
