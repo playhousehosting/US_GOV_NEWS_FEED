@@ -1,19 +1,35 @@
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
-  background-color: #f9f9f9;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f0f2f5;
+  color: #333;
+  line-height: 1.6;
 }
 
-h1 {
-  text-align: center;
-  color: #333;
+h1, h2, h3, h4, h5, h6 {
+  color: #1a202c;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
 }
 
 a {
-  color: #007BFF;
+  color: #3182ce;
   text-decoration: none;
 }
 
 a:hover {
   text-decoration: underline;
+}
+
+/* Mobile-first responsive design */
+@media (max-width: 768px) {
+  /* Adjust styles for smaller screens */
+  body {
+    font-size: 1rem;
+  }
+
+  /* Example: Adjust heading sizes */
+  h1 {
+    font-size: 2rem;
+  }
 }

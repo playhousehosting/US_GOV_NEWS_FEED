@@ -298,55 +298,57 @@ const formatDate = (dateString: string) => {
   max-width: 1200px;
   margin: 0 auto;
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  padding: 0 80px;
+  padding: 0 20px;
 }
 
 .header-content h1 {
   margin: 0;
-  text-align: center;
+  text-align: left;
   flex: 1;
-  font-size: 2em;
+  font-size: 1.8em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .presidential-seal {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 60px;
-  height: 60px;
+  width: 40px;
+  height: 40px;
   filter: brightness(0) invert(1);
   opacity: 0.9;
   transition: all 0.3s ease;
+  margin-left: 15px;
+  flex-shrink: 0;
 }
 
 .presidential-seal:hover {
   opacity: 1;
-  transform: translateY(-50%) scale(1.1);
+  transform: scale(1.1);
 }
 
 .search-bar {
   margin: 15px auto;
-  max-width: 600px;
+  max-width: 100%;
   width: 100%;
+  padding: 0 20px;
 }
 
 .search-bar input {
   width: 100%;
-  padding: 12px 20px;
-  font-size: 16px;
-  border: none;
-  border-radius: 25px;
-  background-color: rgba(255, 255, 255, 0.9);
+  padding: 10px 15px;
+  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.95);
   transition: all 0.3s ease;
 }
 
 .search-bar input:focus {
   outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
   background-color: white;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
 .search-stats {
@@ -418,47 +420,58 @@ const formatDate = (dateString: string) => {
 
 .executive-orders-grid {
   display: grid;
-  gap: 20px;
-  margin-top: 20px;
+  gap: 15px;
+  margin-top: 15px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .executive-order {
-  border: 1px solid #ddd;
-  padding: 20px;
-  border-radius: 8px;
+  border: none;
+  padding: 15px;
+  border-radius: 12px;
   background-color: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.executive-order:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .order-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 20px;
-  margin-bottom: 15px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .order-header h3 {
   margin: 0;
   flex: 1;
+  font-size: 1.1em;
+  line-height: 1.4;
 }
 
 .status-badge {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.9em;
-  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .status-badge.pending_publication {
-  background-color: #ffd700;
-  color: #333;
+  background-color: #fff3cd;
+  color: #856404;
 }
 
 .status-badge.published {
-  background-color: #4caf50;
-  color: white;
+  background-color: #d4edda;
+  color: #155724;
 }
 
 .order-meta {
@@ -507,42 +520,46 @@ const formatDate = (dateString: string) => {
 
 .cnn-top-stories-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  margin-top: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
 }
 
 .cnn-stories-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
 }
 
 .cnn-top-story, .cnn-story {
-  border: 1px solid #ddd;
+  border: none;
   padding: 15px;
-  border-radius: 8px;
+  border-radius: 12px;
   background-color: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .cnn-top-story:hover, .cnn-story:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .cnn-top-story.featured {
-  grid-column: span 2;
+  grid-column: 1 / -1;
 }
 
 .cnn-top-story-image, .cnn-story-image {
   width: 100%;
-  height: 200px;
+  height: 180px;
   object-fit: cover;
-  border-radius: 4px;
-  margin-bottom: 10px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  background-color: #f0f0f0;
 }
 
 .cnn-category {
@@ -597,13 +614,14 @@ const formatDate = (dateString: string) => {
 
 .cnn-sidebar {
   flex: 1;
-  background-color: #f0f0f0;
+  background-color: #ffffff;
   padding: 20px;
-  border-radius: 8px;
+  border-radius: 12px;
   height: fit-content;
   position: sticky;
   top: 20px;
   max-width: 300px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .cnn-categories {
@@ -613,20 +631,22 @@ const formatDate = (dateString: string) => {
 }
 
 .cnn-categories li {
-  padding: 10px;
-  margin: 5px 0;
+  padding: 10px 15px;
+  margin: 3px 0;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 8px;
   transition: all 0.2s ease;
+  font-size: 0.95em;
 }
 
 .cnn-categories li:hover {
-  background-color: #e0e0e0;
+  background-color: #f8f9fa;
 }
 
 .cnn-categories li.active {
   background-color: #cc0000;
   color: #fff;
+  font-weight: 500;
 }
 
 .cnn-stats {
@@ -692,36 +712,68 @@ const formatDate = (dateString: string) => {
   }
 }
 
+@media (max-width: 1024px) {
+  .cnn-main {
+    padding: 15px;
+  }
+  
+  .cnn-top-stories-grid,
+  .cnn-stories-grid,
+  .executive-orders-grid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+  }
+}
+
 @media (max-width: 768px) {
   .header-content {
-    padding: 0 50px;
+    padding: 0 15px;
   }
 
   .presidential-seal {
-    width: 50px;
-    height: 50px;
+    width: 35px;
+    height: 35px;
   }
 
   .header-content h1 {
-    font-size: 1.8em;
+    font-size: 1.5em;
   }
 
   .type-filter, .status-filter {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 0 15px;
+    justify-content: center;
+  }
+
+  .type-filter button, .status-filter button {
+    flex: 0 1 auto;
+    min-width: 120px;
+    text-align: center;
   }
 
   .cnn-main {
     flex-direction: column;
+    padding: 10px;
   }
 
   .cnn-sidebar {
     position: static;
-    margin-top: 20px;
+    margin: 15px 0;
     max-width: none;
   }
 
-  .cnn-stories-grid {
-    grid-template-columns: 1fr;
+  .cnn-categories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .cnn-categories li {
+    flex: 0 1 auto;
+    min-width: 120px;
+    text-align: center;
   }
 
   .order-meta {
@@ -730,39 +782,65 @@ const formatDate = (dateString: string) => {
 
   .meta-item {
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
   }
 
   .meta-label {
     min-width: auto;
+    color: #888;
+    font-size: 0.9em;
   }
 
   .order-actions {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
   }
 
   .btn {
     text-align: center;
+    width: 100%;
+    font-size: 0.9em;
   }
 }
 
 @media (max-width: 480px) {
   .header-content {
-    padding: 0 40px;
+    padding: 0 10px;
   }
 
   .presidential-seal {
-    width: 40px;
-    height: 40px;
+    width: 30px;
+    height: 30px;
   }
 
   .header-content h1 {
-    font-size: 1.5em;
+    font-size: 1.3em;
+  }
+
+  .search-bar {
+    padding: 0 10px;
   }
 
   .search-bar input {
     font-size: 14px;
-    padding: 10px 16px;
+    padding: 8px 12px;
+  }
+
+  .type-filter, .status-filter {
+    padding: 0 10px;
+  }
+
+  .type-filter button, .status-filter button {
+    min-width: 100px;
+    padding: 6px 10px;
+    font-size: 0.9em;
+  }
+
+  .cnn-categories li {
+    min-width: 100px;
+    padding: 8px 12px;
+    font-size: 0.9em;
   }
 }
 </style>
