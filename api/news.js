@@ -320,14 +320,35 @@ const processRssItem = async (item, category) => {
   if (category.includes('Exchange Rate')) {
     // Format the exchange rate data more nicely
     try {
-      // Extract the rate from the title (usually contains the rate)
-      const rateMatch = item.title.match(/(\d+\.\d+)/);
-      const rate = rateMatch ? rateMatch[1] : 'N/A';
+      // Extract the rate from the title or content
+      let rate = 'N/A';
+      const rateMatchTitle = item.title.match(/(\d+\.\d+)/);
+      const rateMatchContent = (item.contentSnippet || item.content || '').match(/(\d+\.\d+)/);
       
-      // Get currency pair from category
-      const currencyPair = category.split(' to ');
-      const fromCurrency = currencyPair[0] || '';
-      const toCurrency = (currencyPair[1] || '').split(' ')[0] || '';
+      if (rateMatchTitle) {
+        rate = rateMatchTitle[1];
+      } else if (rateMatchContent) {
+        rate = rateMatchContent[1];
+      }
+      
+      // Get currency pair from category or URL
+      let fromCurrency = '';
+      let toCurrency = '';
+      
+      if (category.includes('USD to CAD')) {
+        fromCurrency = 'USD';
+        toCurrency = 'CAD';
+      } else if (category.includes('GBP to CAD')) {
+        fromCurrency = 'GBP';
+        toCurrency = 'CAD';
+      } else {
+        // Try to extract from URL
+        const currencyMatch = item.link.match(/FX([A-Z]{3})([A-Z]{3})/);
+        if (currencyMatch) {
+          fromCurrency = currencyMatch[1];
+          toCurrency = currencyMatch[2];
+        }
+      }
       
       // Format the date
       const date = item.pubDate ? new Date(item.pubDate).toLocaleDateString('en-US', {
@@ -335,6 +356,9 @@ const processRssItem = async (item, category) => {
         month: 'long',
         day: 'numeric'
       }) : 'N/A';
+      
+      // Update the title to be more descriptive
+      baseArticle.title = `${fromCurrency}/${toCurrency} Exchange Rate: ${rate}`;
       
       // Create a more informative content
       baseArticle.content = `Exchange Rate: ${rate}\nDate: ${date}\n\n` +
@@ -345,6 +369,12 @@ const processRssItem = async (item, category) => {
       if (!baseArticle.image) {
         baseArticle.image = 'https://www.bankofcanada.ca/wp-content/themes/parent-theme/images/BOC_logo.png';
       }
+      
+      // Set a specific category for better filtering
+      baseArticle.category = 'Currency Exchange Rates';
+      
+      // Log successful processing
+      log(`Processed exchange rate: ${fromCurrency}/${toCurrency} = ${rate}`);
     } catch (error) {
       log('Error formatting exchange rate data', { error: error.message });
     }
@@ -444,7 +474,18 @@ module.exports = async (req, res) => {
               const currencyMatch = url.match(/fx_rss\/(FX[A-Z]+)/);
               if (currencyMatch) {
                 category = currencyMatch[1];
-                categoryName = feedCategories[category] || 'Currency Exchange Rate';
+                
+                // Set specific category names for known currency pairs
+                if (category === 'FXUSDCAD') {
+                  categoryName = 'USD to CAD Exchange Rate';
+                } else if (category === 'FXGBPCAD') {
+                  categoryName = 'GBP to CAD Exchange Rate';
+                } else {
+                  categoryName = feedCategories[category] || 'Currency Exchange Rate';
+                }
+                
+                // Log the currency feed detection
+                log(`Detected currency feed: ${category} -> ${categoryName}`);
               } else {
                 category = 'bankofcanada.ca';
                 categoryName = feedCategories[category] || 'Bank of Canada';
