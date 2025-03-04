@@ -1,13 +1,17 @@
 <template>
-  <div class="cnn-clone">
+  <div class="cnn-clone" :class="{ 'dark-mode': isDarkMode }">
     <header class="cnn-header">
       <div class="header-content">
         <h1>US Government News Feed</h1>
-        <img 
-          src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Seal_of_the_President_of_the_United_States.svg/800px-Seal_of_the_President_of_the_United_States.svg.png" 
-          alt="Presidential Seal" 
+        <img
+          src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Seal_of_the_President_of_the_United_States.svg/800px-Seal_of_the_President_of_the_United_States.svg.png"
+          alt="Presidential Seal"
           class="presidential-seal"
         />
+        <button @click="toggleDarkMode" class="theme-toggle" aria-label="Toggle dark mode">
+          <span v-if="isDarkMode">☀️</span>
+          <span v-else>🌙</span>
+        </button>
       </div>
       <div class="search-bar">
         <input 
@@ -106,7 +110,18 @@
                 <p class="cnn-content">{{ article.content }}</p>
                 <div class="cnn-meta">
                   <span class="cnn-date">{{ formatDate(article.pubDate) }}</span>
-                  <a :href="article.link" target="_blank" class="cnn-read-more">Read more</a>
+                  <div class="cnn-actions">
+                    <button
+                      @click="toggleBookmark(article)"
+                      class="bookmark-btn"
+                      :class="{ 'bookmarked': isBookmarked(article) }"
+                      :aria-label="isBookmarked(article) ? 'Remove from bookmarks' : 'Add to bookmarks'"
+                    >
+                      <span v-if="isBookmarked(article)">★</span>
+                      <span v-else>☆</span>
+                    </button>
+                    <a :href="article.link" target="_blank" class="cnn-read-more">Read more</a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -122,7 +137,18 @@
                 <p class="cnn-content">{{ article.content }}</p>
                 <div class="cnn-meta">
                   <span class="cnn-date">{{ formatDate(article.pubDate) }}</span>
-                  <a :href="article.link" target="_blank" class="cnn-read-more">Read more</a>
+                  <div class="cnn-actions">
+                    <button
+                      @click="toggleBookmark(article)"
+                      class="bookmark-btn"
+                      :class="{ 'bookmarked': isBookmarked(article) }"
+                      :aria-label="isBookmarked(article) ? 'Remove from bookmarks' : 'Add to bookmarks'"
+                    >
+                      <span v-if="isBookmarked(article)">★</span>
+                      <span v-else>☆</span>
+                    </button>
+                    <a :href="article.link" target="_blank" class="cnn-read-more">Read more</a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -154,13 +180,31 @@
           <li @click="clearCategory" :class="{ active: !store.selectedCategory }">
             All Categories
           </li>
-          <li v-for="category in store.categories" 
-              :key="category" 
-              @click="filterByCategory(category)" 
+          <li v-for="category in store.categories"
+              :key="category"
+              @click="filterByCategory(category)"
               :class="{ active: store.selectedCategory === category }">
             {{ category }}
           </li>
         </ul>
+        
+        <div class="bookmarks-section" v-if="bookmarks.length > 0">
+          <h2>Bookmarks</h2>
+          <ul class="bookmarks-list">
+            <li v-for="bookmark in bookmarkedArticles" :key="bookmark.link">
+              <a :href="bookmark.link" target="_blank" class="bookmark-link">
+                {{ bookmark.title }}
+              </a>
+              <button
+                @click="toggleBookmark(bookmark)"
+                class="remove-bookmark-btn"
+                aria-label="Remove from bookmarks"
+              >
+                ✕
+              </button>
+            </li>
+          </ul>
+        </div>
 
         <div class="cnn-stats" v-if="!store.loading && !store.error">
           <h3>Statistics</h3>
@@ -183,17 +227,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useNewsStore } from '../store';
 
 const store = useNewsStore();
 const currentPage = ref(1);
 const itemsPerPage = 12;
 const searchQuery = ref('');
+const isDarkMode = ref(false);
+const bookmarks = ref<string[]>([]);
 
 onMounted(async () => {
   await store.fetchNews();
+  
+  // Check for saved theme preference
+  const savedTheme = localStorage.getItem('theme');
+  if (savedTheme === 'dark') {
+    isDarkMode.value = true;
+    document.body.classList.add('dark-mode');
+  }
+  
+  // Load bookmarks from localStorage
+  const savedBookmarks = localStorage.getItem('bookmarks');
+  if (savedBookmarks) {
+    try {
+      bookmarks.value = JSON.parse(savedBookmarks);
+    } catch (e) {
+      console.error('Error loading bookmarks:', e);
+    }
+  }
 });
+
+// Toggle dark mode
+const toggleDarkMode = () => {
+  isDarkMode.value = !isDarkMode.value;
+  if (isDarkMode.value) {
+    document.body.classList.add('dark-mode');
+    localStorage.setItem('theme', 'dark');
+  } else {
+    document.body.classList.remove('dark-mode');
+    localStorage.setItem('theme', 'light');
+  }
+};
 
 // Debounce search to avoid too many updates
 let searchTimeout: number | null = null;
@@ -237,9 +312,14 @@ const paginatedArticles = computed(() => {
 });
 
 // Total pages
-const totalPages = computed(() => 
+const totalPages = computed(() =>
   Math.ceil(remainingArticles.value.length / itemsPerPage)
 );
+
+// Bookmarked articles
+const bookmarkedArticles = computed(() => {
+  return store.news.filter(article => bookmarks.value.includes(article.link));
+});
 
 // Latest update
 const latestUpdate = computed(() => {
@@ -270,6 +350,27 @@ const filterByStatus = (status: 'all' | 'published' | 'pending_publication') => 
   currentPage.value = 1;
 };
 
+// Bookmark functionality
+const toggleBookmark = (article: any) => {
+  const articleId = article.link;
+  const index = bookmarks.value.indexOf(articleId);
+  
+  if (index === -1) {
+    // Add to bookmarks
+    bookmarks.value.push(articleId);
+  } else {
+    // Remove from bookmarks
+    bookmarks.value.splice(index, 1);
+  }
+  
+  // Save to localStorage
+  localStorage.setItem('bookmarks', JSON.stringify(bookmarks.value));
+};
+
+const isBookmarked = (article: any): boolean => {
+  return bookmarks.value.includes(article.link);
+};
+
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return new Intl.DateTimeFormat('en-US', {
@@ -289,6 +390,36 @@ const formatDate = (dateString: string) => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark Mode Styles */
+.dark-mode {
+  background-color: #121212;
+  color: #e0e0e0;
+}
+
+.theme-toggle {
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: background-color 0.3s ease;
+}
+
+.theme-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 .cnn-header {
@@ -350,13 +481,25 @@ const formatDate = (dateString: string) => {
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 4px;
   background-color: rgba(255, 255, 255, 0.95);
-  transition: all 0.3s ease;
+  transition: all 0.3s ease, background-color 0.3s ease, color 0.3s ease;
+  color: #333;
 }
 
 .search-bar input:focus {
   outline: none;
   border-color: rgba(255, 255, 255, 0.4);
   background-color: white;
+}
+
+.dark-mode .search-bar input {
+  background-color: rgba(30, 30, 30, 0.9);
+  color: #e0e0e0;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .search-bar input:focus {
+  background-color: rgba(40, 40, 40, 0.95);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .search-stats {
@@ -416,10 +559,19 @@ const formatDate = (dateString: string) => {
   padding: 20px;
   font-size: 1.2em;
   color: #666;
+  transition: color 0.3s ease;
+}
+
+.dark-mode .loading, .dark-mode .no-results {
+  color: #aaa;
 }
 
 .error {
   color: #cc0000;
+}
+
+.dark-mode .error {
+  color: #ff6666;
 }
 
 .no-results {
@@ -439,12 +591,21 @@ const formatDate = (dateString: string) => {
   border-radius: 12px;
   background-color: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
+  transition: all 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .executive-order:hover {
   transform: translateY(-3px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.dark-mode .executive-order {
+  background-color: #1e1e1e;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.dark-mode .executive-order:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .order-header {
@@ -475,11 +636,23 @@ const formatDate = (dateString: string) => {
 .status-badge.pending_publication {
   background-color: #fff3cd;
   color: #856404;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.dark-mode .status-badge.pending_publication {
+  background-color: #3a3000;
+  color: #ffd54f;
 }
 
 .status-badge.published {
   background-color: #d4edda;
   color: #155724;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.dark-mode .status-badge.published {
+  background-color: #0a3622;
+  color: #4caf50;
 }
 
 .order-meta {
@@ -497,6 +670,11 @@ const formatDate = (dateString: string) => {
 .meta-label {
   color: #666;
   min-width: 120px;
+  transition: color 0.3s ease;
+}
+
+.dark-mode .meta-label {
+  color: #aaa;
 }
 
 .order-content {
@@ -546,7 +724,7 @@ const formatDate = (dateString: string) => {
   border-radius: 12px;
   background-color: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
+  transition: all 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -555,6 +733,15 @@ const formatDate = (dateString: string) => {
 .cnn-top-story:hover, .cnn-story:hover {
   transform: translateY(-3px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.dark-mode .cnn-top-story, .dark-mode .cnn-story {
+  background-color: #1e1e1e;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.dark-mode .cnn-top-story:hover, .dark-mode .cnn-story:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .cnn-top-story.featured {
@@ -578,6 +765,12 @@ const formatDate = (dateString: string) => {
   border-radius: 4px;
   font-size: 0.9em;
   margin-bottom: 10px;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.dark-mode .cnn-category {
+  background-color: #2c2c2c;
+  color: #aaa;
 }
 
 .cnn-title {
@@ -594,6 +787,11 @@ const formatDate = (dateString: string) => {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  transition: color 0.3s ease;
+}
+
+.dark-mode .cnn-content {
+  color: #aaa;
 }
 
 .cnn-meta {
@@ -603,9 +801,55 @@ const formatDate = (dateString: string) => {
   margin-top: 10px;
 }
 
+.cnn-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bookmark-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2em;
+  color: #ccc;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.bookmark-btn:hover {
+  color: #ffb700;
+  transform: scale(1.1);
+}
+
+.bookmark-btn.bookmarked {
+  color: #ffb700;
+}
+
+.dark-mode .bookmark-btn {
+  color: #666;
+}
+
+.dark-mode .bookmark-btn:hover {
+  color: #ffb700;
+}
+
+.dark-mode .bookmark-btn.bookmarked {
+  color: #ffb700;
+}
+
 .cnn-date {
   color: #666;
   font-size: 0.9em;
+  transition: color 0.3s ease;
+}
+
+.dark-mode .cnn-date {
+  color: #aaa;
 }
 
 .cnn-read-more {
@@ -620,6 +864,14 @@ const formatDate = (dateString: string) => {
   color: #990000;
 }
 
+.dark-mode .cnn-read-more {
+  color: #ff6666;
+}
+
+.dark-mode .cnn-read-more:hover {
+  color: #ff8888;
+}
+
 .cnn-sidebar {
   flex: 1;
   background-color: #ffffff;
@@ -630,6 +882,12 @@ const formatDate = (dateString: string) => {
   top: 20px;
   max-width: 300px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.dark-mode .cnn-sidebar {
+  background-color: #1e1e1e;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .cnn-categories {
@@ -651,16 +909,102 @@ const formatDate = (dateString: string) => {
   background-color: #f8f9fa;
 }
 
+.dark-mode .cnn-categories li:hover {
+  background-color: #2c2c2c;
+}
+
 .cnn-categories li.active {
   background-color: #cc0000;
   color: #fff;
   font-weight: 500;
 }
 
+.bookmarks-section {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #ddd;
+  transition: border-color 0.3s ease;
+}
+
+.dark-mode .bookmarks-section {
+  border-top-color: #444;
+}
+
+.bookmarks-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0 0;
+}
+
+.bookmarks-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  margin-bottom: 5px;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  transition: background-color 0.3s ease;
+}
+
+.dark-mode .bookmarks-list li {
+  background-color: #2c2c2c;
+}
+
+.bookmark-link {
+  color: #333;
+  text-decoration: none;
+  font-size: 0.9em;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.3s ease;
+}
+
+.dark-mode .bookmark-link {
+  color: #e0e0e0;
+}
+
+.bookmark-link:hover {
+  color: #cc0000;
+}
+
+.dark-mode .bookmark-link:hover {
+  color: #ff6666;
+}
+
+.remove-bookmark-btn {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 0.9em;
+  padding: 0 0 0 8px;
+  transition: color 0.2s ease;
+}
+
+.remove-bookmark-btn:hover {
+  color: #cc0000;
+}
+
+.dark-mode .remove-bookmark-btn {
+  color: #777;
+}
+
+.dark-mode .remove-bookmark-btn:hover {
+  color: #ff6666;
+}
+
 .cnn-stats {
   margin-top: 30px;
   padding-top: 20px;
   border-top: 1px solid #ddd;
+  transition: border-color 0.3s ease;
+}
+
+.dark-mode .cnn-stats {
+  border-top-color: #444;
 }
 
 .cnn-stats h3 {
@@ -696,6 +1040,11 @@ const formatDate = (dateString: string) => {
 
 .page-info {
   color: #666;
+  transition: color 0.3s ease;
+}
+
+.dark-mode .page-info {
+  color: #aaa;
 }
 
 .cnn-footer {
@@ -704,6 +1053,11 @@ const formatDate = (dateString: string) => {
   background-color: #333;
   color: #fff;
   margin-top: auto;
+  transition: background-color 0.3s ease;
+}
+
+.dark-mode .cnn-footer {
+  background-color: #1a1a1a;
 }
 
 @media (max-width: 1200px) {
