@@ -42,7 +42,9 @@ const rssFeeds = [
   'https://www.govinfo.gov/rss/uscourts-oknb.xml',
   'https://www.govinfo.gov/rss/uscourts-okwb.xml',
   'https://www.govinfo.gov/rss/uscourts-moeb.xml',
-  'https://www.govinfo.gov/rss/uscourts-mowb.xml'
+  'https://www.govinfo.gov/rss/uscourts-mowb.xml',
+  'https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=400&Site=945&max=10',
+  'https://www.govinfo.gov/rss/uscourts-ded.xml'
 ];
 
 const feedCategories = {
@@ -56,7 +58,9 @@ const feedCategories = {
   'uscourts-oknb': 'US Courts - OK Northern Bankruptcy',
   'uscourts-okwb': 'US Courts - OK Western Bankruptcy',
   'uscourts-moeb': 'US Courts - MO Eastern Bankruptcy',
-  'uscourts-mowb': 'US Courts - MO Western Bankruptcy'
+  'uscourts-mowb': 'US Courts - MO Western Bankruptcy',
+  'uscourts-ded': 'US Courts - Delaware District',
+  'defense.gov': 'Department of Defense'
 };
 
 // Helper function to extract package ID from URL
@@ -292,6 +296,21 @@ const processRssItem = async (item, category) => {
     type: 'rss'
   };
 
+  // Special handling for Defense.gov feed
+  if (category === 'Department of Defense') {
+    // Defense.gov feeds often have images in the content
+    const imageMatch = baseArticle.content.match(/<img[^>]+src="([^">]+)"/i);
+    if (imageMatch && imageMatch[1]) {
+      baseArticle.image = imageMatch[1];
+    }
+    
+    // Clean up content (remove HTML)
+    baseArticle.content = baseArticle.content
+      .replace(/<[^>]+>/g, ' ')  // Replace HTML tags with spaces
+      .replace(/\s+/g, ' ')      // Replace multiple spaces with single space
+      .trim();                   // Trim whitespace
+  }
+
   // If it's a budget document, fetch additional metadata
   if (category === 'Budget Documents') {
     const packageId = extractPackageId(item.link);
@@ -374,14 +393,23 @@ module.exports = async (req, res) => {
         rssFeeds.map(async (url) => {
           try {
             const feed = await parser.parseURL(url);
-            const categoryMatch = url.match(/\/rss\/([^.]+)\.xml$/);
-            if (!categoryMatch) {
-              log(`Invalid RSS feed URL format: ${url}`);
-              return { items: [], category: '' };
-            }
+            let category = '';
+            let categoryName = '';
             
-            const category = categoryMatch[1];
-            const categoryName = feedCategories[category] || category;
+            // Handle different URL formats
+            if (url.includes('defense.gov')) {
+              category = 'defense.gov';
+              categoryName = feedCategories[category] || 'Department of Defense';
+            } else {
+              const categoryMatch = url.match(/\/rss\/([^.]+)\.xml$/);
+              if (!categoryMatch) {
+                log(`Invalid RSS feed URL format: ${url}`);
+                return { items: [], category: '' };
+              }
+              
+              category = categoryMatch[1];
+              categoryName = feedCategories[category] || category;
+            }
             
             // Process each item in the feed
             const items = await Promise.all(
