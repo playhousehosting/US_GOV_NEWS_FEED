@@ -44,7 +44,9 @@ const rssFeeds = [
   'https://www.govinfo.gov/rss/uscourts-moeb.xml',
   'https://www.govinfo.gov/rss/uscourts-mowb.xml',
   'https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=400&Site=945&max=10',
-  'https://www.govinfo.gov/rss/uscourts-ded.xml'
+  'https://www.govinfo.gov/rss/uscourts-ded.xml',
+  'https://www.bankofcanada.ca/valet/fx_rss/FXUSDCAD',
+  'https://www.bankofcanada.ca/valet/fx_rss/FXGBPCAD'
 ];
 
 const feedCategories = {
@@ -60,7 +62,10 @@ const feedCategories = {
   'uscourts-moeb': 'US Courts - MO Eastern Bankruptcy',
   'uscourts-mowb': 'US Courts - MO Western Bankruptcy',
   'uscourts-ded': 'US Courts - Delaware District',
-  'defense.gov': 'Department of Defense'
+  'defense.gov': 'Department of Defense',
+  'FXUSDCAD': 'USD to CAD Exchange Rate',
+  'FXGBPCAD': 'GBP to CAD Exchange Rate',
+  'bankofcanada.ca': 'Bank of Canada'
 };
 
 // Helper function to extract package ID from URL
@@ -310,6 +315,40 @@ const processRssItem = async (item, category) => {
       .replace(/\s+/g, ' ')      // Replace multiple spaces with single space
       .trim();                   // Trim whitespace
   }
+  
+  // Special handling for Bank of Canada exchange rate feeds
+  if (category.includes('Exchange Rate')) {
+    // Format the exchange rate data more nicely
+    try {
+      // Extract the rate from the title (usually contains the rate)
+      const rateMatch = item.title.match(/(\d+\.\d+)/);
+      const rate = rateMatch ? rateMatch[1] : 'N/A';
+      
+      // Get currency pair from category
+      const currencyPair = category.split(' to ');
+      const fromCurrency = currencyPair[0] || '';
+      const toCurrency = (currencyPair[1] || '').split(' ')[0] || '';
+      
+      // Format the date
+      const date = item.pubDate ? new Date(item.pubDate).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      }) : 'N/A';
+      
+      // Create a more informative content
+      baseArticle.content = `Exchange Rate: ${rate}\nDate: ${date}\n\n` +
+        `1 ${fromCurrency} = ${rate} ${toCurrency}\n\n` +
+        `Source: Bank of Canada`;
+      
+      // Add a generic currency image
+      if (!baseArticle.image) {
+        baseArticle.image = 'https://www.bankofcanada.ca/wp-content/themes/parent-theme/images/BOC_logo.png';
+      }
+    } catch (error) {
+      log('Error formatting exchange rate data', { error: error.message });
+    }
+  }
 
   // If it's a budget document, fetch additional metadata
   if (category === 'Budget Documents') {
@@ -400,6 +439,16 @@ module.exports = async (req, res) => {
             if (url.includes('defense.gov')) {
               category = 'defense.gov';
               categoryName = feedCategories[category] || 'Department of Defense';
+            } else if (url.includes('bankofcanada.ca')) {
+              // Extract currency pair from Bank of Canada URL
+              const currencyMatch = url.match(/fx_rss\/(FX[A-Z]+)/);
+              if (currencyMatch) {
+                category = currencyMatch[1];
+                categoryName = feedCategories[category] || 'Currency Exchange Rate';
+              } else {
+                category = 'bankofcanada.ca';
+                categoryName = feedCategories[category] || 'Bank of Canada';
+              }
             } else {
               const categoryMatch = url.match(/\/rss\/([^.]+)\.xml$/);
               if (!categoryMatch) {
