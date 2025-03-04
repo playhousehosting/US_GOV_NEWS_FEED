@@ -563,7 +563,7 @@ const formatDate = (dateString: string) => {
 }
 
 .dark-mode .loading, .dark-mode .no-results {
-  color: #aaa;
+  color: #d0d0d0;
 }
 
 .error {
@@ -674,7 +674,7 @@ const formatDate = (dateString: string) => {
 }
 
 .dark-mode .meta-label {
-  color: #aaa;
+  color: #d0d0d0;
 }
 
 .order-content {
@@ -770,7 +770,7 @@ const formatDate = (dateString: string) => {
 
 .dark-mode .cnn-category {
   background-color: #2c2c2c;
-  color: #aaa;
+  color: #e0e0e0;
 }
 
 .cnn-title {
@@ -791,7 +791,7 @@ const formatDate = (dateString: string) => {
 }
 
 .dark-mode .cnn-content {
-  color: #aaa;
+  color: #d0d0d0;
 }
 
 .cnn-meta {
@@ -849,7 +849,7 @@ const formatDate = (dateString: string) => {
 }
 
 .dark-mode .cnn-date {
-  color: #aaa;
+  color: #d0d0d0;
 }
 
 .cnn-read-more {
@@ -1044,7 +1044,7 @@ const formatDate = (dateString: string) => {
 }
 
 .dark-mode .page-info {
-  color: #aaa;
+  color: #d0d0d0;
 }
 
 .cnn-footer {
